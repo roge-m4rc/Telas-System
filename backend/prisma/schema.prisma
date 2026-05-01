@@ -1,0 +1,174 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // 
+}
+// 
+
+model Rol {
+  id       Int       @id @default(autoincrement())
+  nombre   String    @unique // Ej: Administrador, Vendedor
+  usuarios Usuario[]
+}
+
+model Usuario {
+  id       Int     @id @default(autoincrement())
+  nombre   String
+  email    String  @unique
+  password String
+  rol_id   Int
+  activo    Boolean  @default(true) // <-- NUEVO CAMPO
+  rol      Rol     @relation(fields: [rol_id], references: [id])
+  ventas   Venta[]
+  auditorias Auditoria[]
+  gastos Gasto[]
+  sesionCaja SesionCaja[]
+}
+
+model Cliente {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  documento String?  @unique
+  email     String?
+  telefono  String?
+  direccion String?
+  
+  // Estos son los dos campos clave para la Fase 3
+  activo    Boolean  @default(true) 
+  fecha_reg DateTime @default(now())
+
+  // Relación con Ventas
+  ventas    Venta[]
+}
+
+model Categoria {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique // Ej: Algodón, Lino, Poliéster
+  productos Producto[]
+}
+
+model Color {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique
+  productos Producto[]
+}
+
+model Producto {
+  id           Int            @id @default(autoincrement())
+  nombre       String
+  categoria_id Int
+  color_id     Int
+  precio       Float
+  stock        Int            @default(0)
+  categoria    Categoria      @relation(fields: [categoria_id], references: [id])
+  color        Color          @relation(fields: [color_id], references: [id])
+  activo Boolean @default(true)
+  movimientos  Movimiento[]
+  detalles     DetalleVenta[]
+}
+
+model Venta {
+  id         Int      @id @default(autoincrement())
+  subtotal   Float    // Dinero sin impuestos
+  igv        Float    // 18% de impuestos
+  total      Float    // Lo que paga el cliente
+  sesion_id  Int?       // Nuevo campo (Opcional para no romper tus ventas anteriores)
+  sesion     SesionCaja? @relation(fields: [sesion_id], references: [id])
+  fecha      DateTime @default(now())
+  estado     String         @default("ACTIVA") // Puede ser "ACTIVA" o "ANULADA"
+  usuario_id Int
+  metodo_pago String   @default("EFECTIVO") // "EFECTIVO", "YAPE", "VISA"
+  cliente_id Int?
+
+  // Relaciones
+  usuario    Usuario         @relation(fields: [usuario_id], references: [id])
+  cliente    Cliente?        @relation(fields: [cliente_id], references: [id])
+  detalles   DetalleVenta[]
+}
+
+model DetalleVenta {
+  id          Int      @id @default(autoincrement())
+  venta_id    Int
+  producto_id Int
+  cantidad    Float    // Float porque puedes vender 2.5 metros de tela
+  precio_unit Float
+  subtotal    Float
+
+  // Relaciones
+  venta       Venta    @relation(fields: [venta_id], references: [id])
+  producto    Producto @relation(fields: [producto_id], references: [id])
+}
+
+model Configuracion {
+  id                  Int      @id @default(1)
+  // Datos de la empresa
+  nombre_empresa      String   @default("Mi Tienda de Telas")
+  ruc                 String   @default("20000000000")
+  direccion           String   @default("Dirección, Ciudad, Perú")
+  telefono            String   @default("")
+  // Parámetros fiscales
+  moneda              String   @default("PEN")
+  simbolo             String   @default("S/")
+  nombre_impuesto     String   @default("IGV")
+  porcentaje_impuesto Float    @default(0.18)
+}
+
+
+model Auditoria {
+  id          Int      @id @default(autoincrement())
+  usuario_id  Int
+  accion      String   // Ej: "LOGIN", "CREAR_USUARIO", "VENTA"
+  detalles    String?  // Detalles extra en formato texto o JSON
+  fecha       DateTime @default(now())
+  
+  // Relación (asumiendo que tu modelo Usuario se llama así)
+  usuario     Usuario  @relation(fields: [usuario_id], references: [id])
+}
+
+model Movimiento {
+  id          Int      @id @default(autoincrement())
+  tipo        String   // "ENTRADA", "SALIDA" o "AJUSTE"
+  cantidad    Float
+  motivo      String?  // Ej: "Venta", "Compra", "Retazo dañado"
+  fecha       DateTime @default(now())
+  
+  // Relación con el producto
+  producto    Producto @relation(fields: [producto_id], references: [id])
+  producto_id Int
+}
+model Gasto {
+  id          Int      @id @default(autoincrement())
+  fecha       DateTime @default(now())
+  descripcion String
+  monto       Float
+  usuario_id  Int
+  sesion_id  Int?       // Nuevo campo (Opcional para no romper tus ventas anteriores)
+  sesion     SesionCaja? @relation(fields: [sesion_id], references: [id]) 
+
+  usuario     Usuario  @relation(fields: [usuario_id], references: [id])
+}
+
+model SesionCaja {
+  id                  Int       @id @default(autoincrement())
+  fecha_apertura      DateTime  @default(now())
+  fecha_cierre        DateTime? // Es nulo hasta que se cierre la caja
+  monto_inicial       Float     @default(0) // El sencillo para dar vuelto
+  monto_final_esperado Float?   // Lo que el sistema calcula que debe haber
+  monto_final_real    Float?    // Lo que el vendedor realmente contó
+  estado              String    @default("ABIERTA") // "ABIERTA" o "CERRADA"
+  usuario_id          Int
+
+  usuario             Usuario   @relation(fields: [usuario_id], references: [id])
+  ventas              Venta[]
+  gastos              Gasto[]
+}
+
