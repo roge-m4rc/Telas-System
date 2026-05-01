@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: 'https://telas-system.onrender.com',
+    baseURL: 'https://telas-system.onrender.com/api',
 });
 
 // 1. INTERCEPTOR DE REQUEST: Añade el Token a cada petición
