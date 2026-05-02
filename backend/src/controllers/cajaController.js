@@ -80,10 +80,12 @@ const obtenerCierreCaja = async (req, res) => {
         // Obtenemos todas las ventas de la sesión
         const ventasSesion = await prisma.venta.findMany({
             where: { 
-                sesion_id: Number(sesion.id)
-                // Quitamos el filtro de estado momentáneamente para probar si así las jala
+                sesion_id: Number(sesion.id) 
             }
         });
+
+        
+
         console.log(`DEBUG: Sesion ID ${sesion.id} tiene ${ventasSesion.length} ventas.`);
         // Agrupamos por método de pago
         const resumenPagos = {
@@ -92,7 +94,7 @@ const obtenerCierreCaja = async (req, res) => {
             VISA: ventasSesion.filter(v => v.metodo_pago === 'VISA').reduce((s, v) => s + Number(v.total), 0),
         };
 
-        const totalVentas = ventasSesion.reduce((s, v) => s + v.total, 0);
+        const totalVentas = ventasSesion.reduce((s, v) => s + Number(v.total), 0);
 
         const gastos = await prisma.gasto.aggregate({
             _sum: { monto: true },
