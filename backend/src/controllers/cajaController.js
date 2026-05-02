@@ -61,69 +61,39 @@ const registrarGasto = async (req, res) => {
 
 // 4. VER RESUMEN DE CIERRE (La función que causaba el error 404/Crash)
 const obtenerCierreCaja = async (req, res) => {
-    const usuario_id = req.usuario ? req.usuario.id : 1;
-    const { id } = req.params;
+    const { id } = req.params; // ID de la caja que seleccionaste en la tabla
 
     try {
-        const sesion = await prisma.sesionCaja.findFirst({
-            where: { 
-                OR: [
-                    { id: id ? Number(id) : undefined },
-                    { usuario_id: Number(usuario_id), estado: 'ABIERTA' }
-                ]
-            },
-            orderBy: { id: 'desc' }
+        const sesion = await prisma.sesionCaja.findUnique({
+            where: { id: Number(id) }
         });
 
-        if (!sesion) return res.status(400).json({ error: 'No se encontró la sesión.' });
+        if (!sesion) return res.status(400).json({ error: 'No existe esa sesión' });
 
-        // Traemos las ventas de la sesión
-        const ventasSesion = await prisma.venta.findMany({
+        const ventas = await prisma.venta.findMany({
             where: { 
                 sesion_id: Number(sesion.id),
                 estado: 'ACTIVA' 
             }
         });
 
-        // Sumatoria robusta (Convertimos a String y UpperCase para evitar errores de tipeo)
-        const resumenPagos = {
-            EFECTIVO: ventasSesion
-                .filter(v => String(v.metodo_pago || '').toUpperCase() === 'EFECTIVO')
-                .reduce((s, v) => s + Number(v.total), 0),
-            YAPE: ventasSesion
-                .filter(v => ['YAPE', 'PLIN'].includes(String(v.metodo_pago || '').toUpperCase()))
-                .reduce((s, v) => s + Number(v.total), 0),
-            VISA: ventasSesion
-                .filter(v => ['VISA', 'TARJETA'].includes(String(v.metodo_pago || '').toUpperCase()))
-                .reduce((s, v) => s + Number(v.total), 0),
-        };
+        // Calculamos los totales aquí mismo para enviarlos "masticaditos"
+        const efectivo = ventas.filter(v => v.metodo_pago === 'EFECTIVO').reduce((s, v) => s + Number(v.total), 0);
+        const yape = ventas.filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0);
+        const tarjeta = ventas.filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0);
 
-        const totalVentas = ventasSesion.reduce((s, v) => s + Number(v.total), 0);
-
-        // --- CORRECCIÓN AQUÍ: Usamos 'sesion.id' en lugar de 'sesionActiva' ---
-        const gastos = await prisma.gasto.aggregate({
-            _sum: { monto: true },
-            where: { sesion_id: Number(sesion.id) }
-        });
-
-        const totalGastos = Number(gastos._sum.monto) || 0;
-
-        // --- CORRECCIÓN AQUÍ: Usamos 'sesion.monto_inicial' ---
-        const montoInicial = Number(sesion.monto_inicial) || 0;
-        const saldoEnEfectivo = montoInicial + resumenPagos.EFECTIVO - totalGastos;
-
+        // Enviamos las llaves EXACTAS que el PDF necesita leer
         res.json({
-            sesion_id: sesion.id,
-            ingresos_totales: totalVentas,
-            detalle_pagos: resumenPagos,
-            salidas_gastos: totalGastos,
-            monto_inicial: montoInicial,
-            efectivo_esperado: saldoEnEfectivo,
-            fecha_apertura: sesion.fecha_apertura
+            monto_inicial: Number(sesion.monto_inicial) || 0,
+            ingresos_totales: ventas.reduce((s, v) => s + Number(v.total), 0),
+            salidas_gastos: 0, // Si no tienes tabla de gastos aún, déjalo en 0
+            efectivo_esperado: (Number(sesion.monto_inicial) || 0) + efectivo,
+            // Estas son las llaves que el PDF busca:
+            EFECTIVO: efectivo,
+            YAPE: yape,
+            VISA: tarjeta
         });
-
     } catch (error) {
-        console.error("ERROR EN CIERRE CAJA:", error);
         res.status(500).json({ error: error.message });
     }
 };

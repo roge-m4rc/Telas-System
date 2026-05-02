@@ -67,37 +67,56 @@ export default function Reportes() {
 
     // 📄 FUNCIÓN PDF CORREGIDA
     const exportarPDF = () => {
-        if (ventas.length === 0) return toast.warning("No hay datos para exportar.");
-        
+    // 1. Verificación de seguridad
+        if (!ventas || ventas.length === 0) return toast.warning("No hay datos para exportar.");
+
         const doc = new jsPDF();
         
-        // Título
-        doc.setFontSize(16);
+        // 2. Configuración de Cabecera
+        doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235); // Azul profesional
         doc.text('Reporte de Ventas Detallado', 14, 15);
+        
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Desde: ${fechas.inicio}  Hasta: ${fechas.fin}`, 14, 22);
-        doc.text(`Total Recaudado: S/ ${resumen.totalVendido.toFixed(2)}`, 14, 28);
+        doc.setTextColor(100, 116, 139); // Gris slate
+        doc.text(`Periodo: ${fechas.inicio} al ${fechas.fin}`, 14, 22);
+        
+        // 3. Resumen de Totales (Aquí es donde jalamos los datos del backend)
+        // Usamos || 0 para que nunca falle si el dato no llega
+        const total = resumen?.totalVendido || 0;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Total Recaudado: S/ ${Number(total).toFixed(2)}`, 14, 30);
 
-        // Transformar ventas a formato de tabla para jsPDF
+        // 4. Transformación de datos para la tabla
         const datosTabla = ventas.map(v => [
-            new Date(v.fecha).toLocaleDateString(),
+            new Date(v.fecha).toLocaleDateString('es-PE'),
             `B001-${String(v.id).padStart(6, '0')}`,
             v.cliente?.nombre || 'Público General',
-            v.metodo_pago,
-            `S/ ${v.total.toFixed(2)}`
+            String(v.metodo_pago || '').toUpperCase(),
+            `S/ ${Number(v.total).toFixed(2)}`
         ]);
 
-        // FORMA INFALIBLE DE USAR AUTOTABLE
+        // 5. Generación de Tabla con AutoTable
         autoTable(doc, {
             startY: 35,
-            head: [['Fecha', 'Boleta', 'Cliente', 'Método', 'Total']],
+            head: [['Fecha', 'Nro. Boleta', 'Cliente', 'Método', 'Total']],
             body: datosTabla,
             theme: 'grid',
-            headStyles: { fillColor: [37, 99, 235] } 
+            headStyles: { 
+                fillColor: [37, 99, 235],
+                fontSize: 10,
+                halign: 'center'
+            },
+            columnStyles: {
+                4: { halign: 'right', fontStyle: 'bold' } // Alinea el total a la derecha
+            },
+            styles: { fontSize: 9 }
         });
 
+        // 6. Descarga del archivo
         doc.save(`Reporte_Ventas_${fechas.inicio}_al_${fechas.fin}.pdf`);
     };
 
