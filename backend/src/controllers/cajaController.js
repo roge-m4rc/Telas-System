@@ -76,9 +76,15 @@ const obtenerCierreCaja = async (req, res) => {
 
         // Agrupamos por método de pago
         const resumenPagos = {
-            EFECTIVO: ventasSesion.filter(v => v.metodo_pago === 'EFECTIVO').reduce((s, v) => s + v.total, 0),
-            YAPE: ventasSesion.filter(v => v.metodo_pago === 'YAPE').reduce((s, v) => s + v.total, 0),
-            VISA: ventasSesion.filter(v => v.metodo_pago === 'VISA').reduce((s, v) => s + v.total, 0),
+            EFECTIVO: ventasSesion
+                .filter(v => v.metodo_pago?.toUpperCase().includes('EFECTIVO'))
+                .reduce((s, v) => s + Number(v.total), 0),
+            YAPE: ventasSesion
+                .filter(v => v.metodo_pago?.toUpperCase().includes('YAPE') || v.metodo_pago?.toUpperCase().includes('PLIN'))
+                .reduce((s, v) => s + Number(v.total), 0),
+            VISA: ventasSesion
+                .filter(v => v.metodo_pago?.toUpperCase().includes('VISA') || v.metodo_pago?.toUpperCase().includes('TARJETA'))
+                .reduce((s, v) => s + Number(v.total), 0),
         };
 
         const totalVentas = ventasSesion.reduce((s, v) => s + v.total, 0);
