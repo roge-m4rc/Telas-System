@@ -3,15 +3,21 @@ const prisma = new PrismaClient();
 
 const obtenerResumenGeneral = async (req, res) => {
     try {
-        const hoy = new Date();
-        const inicioDia = new Date(hoy.setHours(0, 0, 0, 0));
-        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        const hoyPeru = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Lima"}));
+
+        const inicioDia = new Date(hoyPeru);
+        inicioDia.setHours(0, 0, 0, 0);
+        const inicioMes = new Date(hoyPeru.getFullYear(), hoyPeru.getMonth(), 1);
+
 
         // Ventas de hoy y del mes
         const ventasHoy = await prisma.venta.aggregate({
             _sum: { total: true },
             _count: { id: true },
-            where: { fecha: { gte: inicioDia } }
+            where: { 
+                fecha: { gte: inicioDia },
+                estado: 'ACTIVA' // Asegúrate de filtrar solo las activas
+            }
         });
 
         const ventasMes = await prisma.venta.aggregate({
