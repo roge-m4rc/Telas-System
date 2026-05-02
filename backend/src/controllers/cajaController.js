@@ -65,31 +65,31 @@ const obtenerCierreCaja = async (req, res) => {
     const { id } = req.params;
     try {
         // Buscamos la sesión: Si viene un ID usamos ese, si no, buscamos la abierta
-        const sesion = id 
-            ? await prisma.sesionCaja.findUnique({ where: { id: Number(id) } })
-            : await prisma.sesionCaja.findFirst({
-                where: { usuario_id, estado: 'ABIERTA' },
-                orderBy: { fecha_apertura: 'desc' } // Trae la más reciente
-              });
+        const sesion = await prisma.sesionCaja.findFirst({
+            where: { 
+                OR: [
+                    { usuario_id: Number(usuario_id), estado: 'ABIERTA' },
+                    { id: Number(sesion_id_del_front) } // Intenta pasarle el ID desde el front
+                ]
+            },
+            orderBy: { id: 'desc' }
+        });
 
         if (!sesion) return res.status(400).json({ error: 'No se encontró la sesión de caja.' });
 
         // Obtenemos todas las ventas de la sesión
         const ventasSesion = await prisma.venta.findMany({
-            where: { sesion_id: sesion.id, estado: 'ACTIVA' }
+            where: { 
+                sesion_id: Number(sesion.id)
+                // Quitamos el filtro de estado momentáneamente para probar si así las jala
+            }
         });
-
+        console.log(`DEBUG: Sesion ID ${sesion.id} tiene ${ventasSesion.length} ventas.`);
         // Agrupamos por método de pago
         const resumenPagos = {
-            EFECTIVO: ventasSesion
-                .filter(v => v.metodo_pago?.toUpperCase().includes('EFECTIVO'))
-                .reduce((s, v) => s + Number(v.total), 0),
-            YAPE: ventasSesion
-                .filter(v => v.metodo_pago?.toUpperCase().includes('YAPE') || v.metodo_pago?.toUpperCase().includes('PLIN'))
-                .reduce((s, v) => s + Number(v.total), 0),
-            VISA: ventasSesion
-                .filter(v => v.metodo_pago?.toUpperCase().includes('VISA') || v.metodo_pago?.toUpperCase().includes('TARJETA'))
-                .reduce((s, v) => s + Number(v.total), 0),
+            EFECTIVO: ventasSesion.filter(v => v.metodo_pago === 'EFECTIVO').reduce((s, v) => s + Number(v.total), 0),
+            YAPE: ventasSesion.filter(v => v.metodo_pago === 'YAPE').reduce((s, v) => s + Number(v.total), 0),
+            VISA: ventasSesion.filter(v => v.metodo_pago === 'VISA').reduce((s, v) => s + Number(v.total), 0),
         };
 
         const totalVentas = ventasSesion.reduce((s, v) => s + v.total, 0);
