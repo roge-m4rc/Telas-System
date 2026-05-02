@@ -63,6 +63,7 @@ const registrarGasto = async (req, res) => {
 const obtenerCierreCaja = async (req, res) => {
     const usuario_id = req.usuario ? req.usuario.id : 1;
     const { id } = req.params;
+
     try {
         const sesion = await prisma.sesionCaja.findFirst({
             where: { 
@@ -76,10 +77,7 @@ const obtenerCierreCaja = async (req, res) => {
 
         if (!sesion) return res.status(400).json({ error: 'No se encontró la sesión.' });
 
-        // Obtenemos todas las ventas de la sesión
-        // LOG DE CONTROL: ¿Qué sesión estamos mirando?
-        console.log(`Buscando ventas para Sesion ID: ${sesion.id}`);
-
+        // Traemos las ventas de la sesión
         const ventasSesion = await prisma.venta.findMany({
             where: { 
                 sesion_id: Number(sesion.id),
@@ -87,43 +85,45 @@ const obtenerCierreCaja = async (req, res) => {
             }
         });
 
-        // LOG DE CONTROL: ¿Cuántas ventas encontró Prisma?
-        console.log(`Ventas encontradas en DB: ${ventasSesion.length}`);
-        if (ventasSesion.length > 0) {
-            console.log(`Primer método de pago detectado: ${ventasSesion[0].metodo_pago}`);
-        }
-
+        // Sumatoria robusta (Convertimos a String y UpperCase para evitar errores de tipeo)
         const resumenPagos = {
             EFECTIVO: ventasSesion
-                .filter(v => v.metodo_pago.toUpperCase() === 'EFECTIVO')
+                .filter(v => String(v.metodo_pago || '').toUpperCase() === 'EFECTIVO')
                 .reduce((s, v) => s + Number(v.total), 0),
             YAPE: ventasSesion
-                .filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago.toUpperCase()))
+                .filter(v => ['YAPE', 'PLIN'].includes(String(v.metodo_pago || '').toUpperCase()))
                 .reduce((s, v) => s + Number(v.total), 0),
             VISA: ventasSesion
-                .filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago.toUpperCase()))
+                .filter(v => ['VISA', 'TARJETA'].includes(String(v.metodo_pago || '').toUpperCase()))
                 .reduce((s, v) => s + Number(v.total), 0),
         };
 
         const totalVentas = ventasSesion.reduce((s, v) => s + Number(v.total), 0);
 
+        // --- CORRECCIÓN AQUÍ: Usamos 'sesion.id' en lugar de 'sesionActiva' ---
         const gastos = await prisma.gasto.aggregate({
             _sum: { monto: true },
-            where: { sesion_id: sesionActiva.id }
+            where: { sesion_id: Number(sesion.id) }
         });
 
-        const totalGastos = gastos._sum.monto || 0;
-        // El saldo físico en caja solo cuenta Efectivo + Monto Inicial - Gastos
-        const saldoEnEfectivo = sesionActiva.monto_inicial + resumenPagos.EFECTIVO - totalGastos;
+        const totalGastos = Number(gastos._sum.monto) || 0;
+
+        // --- CORRECCIÓN AQUÍ: Usamos 'sesion.monto_inicial' ---
+        const montoInicial = Number(sesion.monto_inicial) || 0;
+        const saldoEnEfectivo = montoInicial + resumenPagos.EFECTIVO - totalGastos;
 
         res.json({
+            sesion_id: sesion.id,
             ingresos_totales: totalVentas,
             detalle_pagos: resumenPagos,
             salidas_gastos: totalGastos,
-            monto_inicial: sesionActiva.monto_inicial,
-            efectivo_esperado: saldoEnEfectivo // Esto es lo que debe haber en el cajón
+            monto_inicial: montoInicial,
+            efectivo_esperado: saldoEnEfectivo,
+            fecha_apertura: sesion.fecha_apertura
         });
+
     } catch (error) {
+        console.error("ERROR EN CIERRE CAJA:", error);
         res.status(500).json({ error: error.message });
     }
 };
