@@ -21,11 +21,21 @@ export default function Reportes() {
     const cargarReporte = async () => {
         setCargando(true);
         try {
-            const res = await api.get(`/ventas/reporte/detallado?inicio=${fechas.inicio}&fin=${fechas.fin}`);
-            setVentas(res.data.ventas);
-            setResumen(res.data.resumen);
+            // Log para ver qué fechas estamos mandando realmente
+            console.log("Enviando fechas:", fechas.inicio, fechas.fin);
+            
+            const res = await api.get(`/ventas/reporte/detallado`, {
+                params: { inicio: fechas.inicio, fin: fechas.fin }
+            });
+
+            // Verificamos que los datos existan antes de setearlos
+            if (res.data) {
+                setVentas(res.data.ventas || []);
+                setResumen(res.data.resumen || { totalVendido: 0, metodos: {} });
+            }
             setPaginaActual(1); 
         } catch (e) {
+            console.error("ERROR CARGANDO REPORTE:", e);
             toast.error("Error al cargar el reporte detallado.");
         } finally {
             setCargando(false);
@@ -114,7 +124,7 @@ export default function Reportes() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:flex md:items-end gap-4">
                 <div className="bg-slate-800 p-6 rounded-3xl text-white shadow-xl shadow-slate-200">
                     <p className="text-[10px] uppercase opacity-70 font-black tracking-widest">Total Rango</p>
                     <p className="text-3xl font-black mt-1">S/ {resumen.totalVendido.toFixed(2)}</p>

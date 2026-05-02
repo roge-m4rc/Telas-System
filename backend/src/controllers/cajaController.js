@@ -81,7 +81,10 @@ const obtenerCierreCaja = async (req, res) => {
         console.log(`Buscando ventas para Sesion ID: ${sesion.id}`);
 
         const ventasSesion = await prisma.venta.findMany({
-            where: { sesion_id: Number(sesion.id) }
+            where: { 
+                sesion_id: Number(sesion.id),
+                estado: 'ACTIVA' 
+            }
         });
 
         // LOG DE CONTROL: ¿Cuántas ventas encontró Prisma?
@@ -92,13 +95,13 @@ const obtenerCierreCaja = async (req, res) => {
 
         const resumenPagos = {
             EFECTIVO: ventasSesion
-                .filter(v => String(v.metodo_pago || '').toUpperCase().includes('EFECTIVO'))
+                .filter(v => v.metodo_pago.toUpperCase() === 'EFECTIVO')
                 .reduce((s, v) => s + Number(v.total), 0),
             YAPE: ventasSesion
-                .filter(v => String(v.metodo_pago || '').toUpperCase().includes('YAPE') || String(v.metodo_pago || '').toUpperCase().includes('PLIN'))
+                .filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago.toUpperCase()))
                 .reduce((s, v) => s + Number(v.total), 0),
             VISA: ventasSesion
-                .filter(v => String(v.metodo_pago || '').toUpperCase().includes('VISA') || String(v.metodo_pago || '').toUpperCase().includes('TARJETA'))
+                .filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago.toUpperCase()))
                 .reduce((s, v) => s + Number(v.total), 0),
         };
 
