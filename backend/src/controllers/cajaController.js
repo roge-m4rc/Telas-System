@@ -62,16 +62,21 @@ const registrarGasto = async (req, res) => {
 // 4. VER RESUMEN DE CIERRE (La función que causaba el error 404/Crash)
 const obtenerCierreCaja = async (req, res) => {
     const usuario_id = req.usuario ? req.usuario.id : 1;
+    const { id } = req.params;
     try {
-        const sesionActiva = await prisma.sesionCaja.findFirst({
-            where: { usuario_id, estado: 'ABIERTA' }
-        });
+        // Buscamos la sesión: Si viene un ID usamos ese, si no, buscamos la abierta
+        const sesion = id 
+            ? await prisma.sesionCaja.findUnique({ where: { id: Number(id) } })
+            : await prisma.sesionCaja.findFirst({
+                where: { usuario_id, estado: 'ABIERTA' },
+                orderBy: { fecha_apertura: 'desc' } // Trae la más reciente
+              });
 
-        if (!sesionActiva) return res.status(400).json({ error: 'No hay una caja abierta.' });
+        if (!sesion) return res.status(400).json({ error: 'No se encontró la sesión de caja.' });
 
         // Obtenemos todas las ventas de la sesión
         const ventasSesion = await prisma.venta.findMany({
-            where: { sesion_id: sesionActiva.id, estado: 'ACTIVA' }
+            where: { sesion_id: sesion.id, estado: 'ACTIVA' }
         });
 
         // Agrupamos por método de pago
