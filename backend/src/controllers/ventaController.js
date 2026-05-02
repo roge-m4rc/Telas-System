@@ -162,33 +162,44 @@ const anularVenta = async (req, res) => {
     }
 };
 const obtenerReporteDetallado = async (req, res) => {
-    try {
-        const { inicio, fin } = req.query;
+    const { inicio, fin } = req.query;
 
-        // 🚨 EL ARREGLO ESTÁ AQUÍ: Le agregamos la hora exacta para forzar la zona horaria local
-        const fechaInicio = inicio ? new Date(inicio + "T00:00:00") : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-        const fechaFin = fin ? new Date(fin + "T23:59:59") : new Date();
+    try {
+        // Ajustamos las fechas recibidas para que no se desfasen con Oregon
+        // Agregamos T00:00:00 y T23:59:59 para cubrir el día completo en Perú
+        const fechaInicio = new Date(`${inicio}T00:00:00-05:00`);
+        const fechaFin = new Date(`${fin}T23:59:59-05:00`);
 
         const ventas = await prisma.venta.findMany({
             where: {
-                fecha: { gte: fechaInicio, lte: fechaFin },
-                estado: 'ACTIVA'
+                fecha: {
+                    gte: fechaInicio,
+                    lte: fechaFin,
+                },
+                estado: 'ACTIVA',
             },
-            include: {
-                cliente: { select: { nombre: true, documento: true } },
-                detalles: { include: { producto: true } }
-            },
-            orderBy: { fecha: 'desc' }
+            include: { cliente: true },
+            orderBy: { fecha: 'desc' },
         });
 
-        const resumen = ventas.reduce((acc, v) => {
-            acc.totalVendido += v.total;
-            acc.metodos[v.metodo_pago] = (acc.metodos[v.metodo_pago] || 0) + v.total;
+        // Calculamos el resumen para las cards del frontend
+        const totalVendido = ventas.reduce((s, v) => s + Number(v.total), 0);
+        
+        const metodos = ventas.reduce((acc, v) => {
+            const m = v.metodo_pago || 'OTROS';
+            acc[m] = (acc[m] || 0) + Number(v.total);
             return acc;
-        }, { totalVendido: 0, metodos: {} });
+        }, {});
 
-        res.json({ resumen, ventas });
+        res.json({
+            ventas,
+            resumen: {
+                totalVendido,
+                metodos
+            }
+        });
     } catch (error) {
+        console.error("Error en reporte detallado:", error);
         res.status(500).json({ error: error.message });
     }
 };
