@@ -1,119 +1,101 @@
-import { useEffect, useState } from 'react'
-import { Toaster, toast } from 'sonner'
-import { obtenerProductos } from './services/api'
-import Login from './components/Login'
-import Sidebar from './components/Sidebar'
-import Dashboard from './views/Dashboard'
-import PuntoVenta from './views/PuntoVenta'
-import InventarioTotal from './views/InventarioTotal'
-import HistorialVentas from './views/HistorialVentas'
-import DirectorioClientes from './components/DirectorioClientes'
-import PanelAdmin from './components/PanelAdmin'
-import Kardex from './views/Kardex'
-import Configuracion from './views/Configuracion'
-import Reportes from './views/Reportes'
-import GuardiaInactividad from './components/GuardiaInactividad'
+import { useState } from 'react';
 
-function App() {
-  const [usuario, setUsuario] = useState(null)
-  const [vistaActual, setVistaActual] = useState('dashboard')
-  const [productos, setProductos] = useState([])
-  const [sidebarAbierto, setSidebarAbierto] = useState(false); // 📱 Control para móvil
+export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
+    // 1. Estado local para saber si el menú está ancho o delgado
+    const [expandido, setExpandido] = useState(true);
 
-  useEffect(() => {
-    const usuarioGuardado = localStorage.getItem('usuario')
-    if (usuarioGuardado) {
-      setUsuario(JSON.parse(usuarioGuardado))
-      cargarDatos()
-    }
-  }, [])
+    const menuItems = [
+        { id: 'dashboard', nombre: 'Inicio', icono: '🏠' },
+        { id: 'punto-venta', nombre: 'Caja y Ventas', icono: '🛒' },
+        { id: 'inventario', nombre: 'Inventario', icono: '📦' },
+        { id: 'ventas', nombre: 'Historial', icono: '📄' },
+        { id: 'clientes', nombre: 'Clientes', icono: '👥' },
+        { id: 'reportes', nombre: 'Reportes', icono: '📊' },
+    ];
 
-  const cargarDatos = async () => {
-    try {
-      const data = await obtenerProductos()
-      setProductos(data || [])
-    } catch (error) {
-      console.error("Error al sincronizar inventario:", error)
-      toast.error("Error de conexión con el servidor")
-    }
-  }
+    const ajustesItems = [
+        { id: 'kardex', nombre: 'Movimientos Kardex', icono: '📈' },
+        { id: 'admin', nombre: 'Panel de Usuarios', icono: '👤' },
+        { id: 'configuracion', nombre: 'Configuración', icono: '⚙️' },
+    ];
 
-  const manejarLogin = (datosUsuario) => {
-    setUsuario(datosUsuario)
-    cargarDatos()
-    toast.success(`¡Bienvenido de nuevo, ${datosUsuario.nombre}!`)
-  }
+    const esAdmin = usuario?.rol === 'Administrador';
 
-  const cerrarSesion = () => {
-    localStorage.clear()
-    setUsuario(null)
-    window.location.reload()
-  }
-
-  if (!usuario) return (
-    <>
-      <Toaster richColors position="top-right" /> 
-      <Login onLoginExitoso={manejarLogin} />
-    </>
-  )
-
-  const esAdmin = usuario.rol === 'Administrador'
-  const denegado = <div className="p-10 text-center font-bold text-red-500">🚫 Acceso denegado</div>
-
-  return (
-    <div className="flex min-h-screen bg-slate-50">
-      <GuardiaInactividad />
-      <Toaster richColors position="top-right" />
-      
-      {/* 📱 SIDEBAR RESPONSIVO */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 transition-transform duration-300 ease-in-out`}>
-        <Sidebar 
-          usuario={usuario} 
-          setVista={(v) => { setVistaActual(v); setSidebarAbierto(false); }} 
-          vistaActual={vistaActual} 
-          onLogout={cerrarSesion} 
-        />
-      </div>
-
-      {/* 📱 OVERLAY PARA CERRAR MENÚ EN MÓVIL */}
-      {sidebarAbierto && (
-        <div onClick={() => setSidebarAbierto(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden" />
-      )}
-
-      {/* 📱 CONTENIDO PRINCIPAL ADAPTABLE */}
-      <main className="flex-1 min-h-screen w-full max-w-full overflow-x-hidden p-3 lg:p-8">
-        
-        <header className="flex justify-between items-center mb-6 p-4 rounded-2xl shadow-sm border border-slate-200 bg-white">
-          <div className="flex items-center gap-3">
-            {/* BOTÓN HAMBURGUESA SOLO MÓVIL */}
-            <button onClick={() => setSidebarAbierto(true)} className="lg:hidden p-2 hover:bg-slate-100 rounded-lg text-xl">
-              ☰
+    return (
+        <aside className={`relative bg-slate-900 text-white min-h-screen transition-all duration-300 flex flex-col ${expandido ? 'w-64' : 'w-20'}`}>
+            
+            {/* BOTÓN PARA COLAPSAR (Solo visible en Desktop) */}
+            <button 
+                onClick={() => setExpandido(!expandido)}
+                className="hidden lg:flex absolute -right-3 top-12 bg-blue-600 rounded-full w-6 h-6 items-center justify-center border-2 border-slate-900 text-[10px] z-50 hover:scale-110 transition-transform"
+            >
+                {expandido ? '◀' : '▶'}
             </button>
-            <h2 className="text-lg lg:text-xl font-black text-slate-700 capitalize tracking-tight">
-              {vistaActual.replace('-', ' ')}
-            </h2>
-          </div>
-          
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-black text-blue-600 leading-none">{usuario.nombre}</p>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{usuario.rol}</p>
-          </div>
-        </header>
 
-        <div className="animate-fadeIn">
-          {vistaActual === 'dashboard'     && <Dashboard productos={productos} />}
-          {vistaActual === 'punto-venta'   && <PuntoVenta productos={productos} onVenta={cargarDatos} />}
-          {vistaActual === 'inventario'    && <InventarioTotal productos={productos} onUpdate={cargarDatos} />}
-          {vistaActual === 'clientes'      && <DirectorioClientes />}
-          {vistaActual === 'reportes'      && (esAdmin ? <Reportes />       : denegado)}
-          {vistaActual === 'ventas'        && (esAdmin ? <HistorialVentas /> : denegado)}
-          {vistaActual === 'kardex'        && (esAdmin ? <Kardex />         : denegado)}
-          {vistaActual === 'admin'         && (esAdmin ? <PanelAdmin />     : denegado)}
-          {vistaActual === 'configuracion' && (esAdmin ? <Configuracion />  : denegado)}
-        </div>
-      </main>
-    </div>
-  )
+            {/* LOGO / TÍTULO */}
+            <div className="p-6 mb-4">
+                <div className="flex items-center gap-3">
+                    <div className="bg-blue-600 p-2 rounded-xl text-xl">🚀</div>
+                    {expandido && (
+                        <div>
+                            <h1 className="font-black text-xl tracking-tighter leading-none">Sistema</h1>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Gestión Textil</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* NAVEGACIÓN PRINCIPAL */}
+            <nav className="flex-1 px-3 space-y-1">
+                {menuItems.map((item) => (
+                    <button
+                        key={item.id}
+                        onClick={() => setVista(item.id)}
+                        className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all ${
+                            vistaActual === item.id 
+                            ? 'bg-blue-600 shadow-lg shadow-blue-900/40 text-white' 
+                            : 'hover:bg-slate-800/50 text-slate-400 hover:text-slate-200'
+                        }`}
+                    >
+                        <span className="text-xl">{item.icono}</span>
+                        {expandido && <span className="font-bold text-sm whitespace-nowrap">{item.nombre}</span>}
+                    </button>
+                ))}
+
+                {/* SECCIÓN ADMIN (Si colapsa, solo mostramos una línea divisoria) */}
+                {esAdmin && (
+                    <>
+                        <div className="my-4 border-t border-slate-800 mx-2" />
+                        {expandido && <p className="px-4 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">Ajustes Avanzados</p>}
+                        
+                        {ajustesItems.map((item) => (
+                            <button
+                                key={item.id}
+                                onClick={() => setVista(item.id)}
+                                className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all ${
+                                    vistaActual === item.id 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'hover:bg-slate-800/50 text-slate-400'
+                                }`}
+                            >
+                                <span className="text-xl">{item.icono}</span>
+                                {expandido && <span className="font-bold text-sm whitespace-nowrap">{item.nombre}</span>}
+                            </button>
+                        ))}
+                    </>
+                )}
+            </nav>
+
+            {/* BOTÓN SALIR */}
+            <div className="p-4 border-t border-slate-800">
+                <button 
+                    onClick={onLogout}
+                    className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-red-500/10 text-red-400 transition-all group"
+                >
+                    <span className="text-xl group-hover:scale-110 transition-transform">🚪</span>
+                    {expandido && <span className="font-bold text-sm">Salir del Sistema</span>}
+                </button>
+            </div>
+        </aside>
+    );
 }
-
-export default App

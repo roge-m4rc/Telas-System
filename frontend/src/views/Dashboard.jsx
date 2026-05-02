@@ -199,7 +199,7 @@ export default function Dashboard({ productos = [] }) {
             </div>
 
             {/* CARDS RESPONSIVAS (1 col en móvil, 2 en tablet, 4 en desktop) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full">
                 <div className="bg-blue-600 p-6 rounded-3xl text-white shadow-xl shadow-blue-100">
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Ventas Hoy</p>
                     <h3 className="text-3xl font-black mt-2">S/ {stats.hoy?.total?.toFixed(2) || '0.00'}</h3>

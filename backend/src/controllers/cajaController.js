@@ -3,12 +3,31 @@ const prisma = new PrismaClient();
 
 // 1. VERIFICAR ESTADO DE LA CAJA
 const estadoCaja = async (req, res) => {
-    const usuario_id = req.usuario ? req.usuario.id : 1; 
     try {
-        const sesion = await prisma.sesionCaja.findFirst({
-            where: { usuario_id, estado: 'ABIERTA' }
+        const hoy = new Date();
+        // Forzamos el inicio del día en zona horaria Perú
+        const inicioDiaPeru = new Date(hoy.toLocaleString("en-US", { timeZone: "America/Lima" }));
+        inicioDiaPeru.setHours(0, 0, 0, 0);
+
+        const cajaAbierta = await prisma.sesionCaja.findFirst({
+            where: { estado: 'ABIERTA' },
+            include: { usuario: true }
         });
-        res.json({ abierta: !!sesion, sesion });
+
+        // Sumamos ventas solo de hoy (Perú) para el contador
+        const ventasHoy = await prisma.venta.aggregate({
+            _sum: { total: true },
+            where: { 
+                fecha: { gte: inicioDiaPeru },
+                estado: 'ACTIVA'
+            }
+        });
+
+        res.json({
+            abierta: !!cajaAbierta,
+            datos: cajaAbierta,
+            totalVentasHoy: Number(ventasHoy._sum.total || 0)
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -61,41 +80,42 @@ const registrarGasto = async (req, res) => {
 
 // 4. VER RESUMEN DE CIERRE (La función que causaba el error 404/Crash)
 const obtenerCierreCaja = async (req, res) => {
-    const { id } = req.params; // El ID que viene de la tabla de Auditoría
-
+    const { id } = req.params;
     try {
         const sesion = await prisma.sesionCaja.findUnique({
-            where: { id: Number(id) }
+            where: { id: Number(id) },
+            include: { usuario: true }
         });
 
-        if (!sesion) return res.status(404).json({ error: "Sesión no encontrada" });
+        if (!sesion) return res.status(404).json({ error: "No existe la sesión" });
 
-        // 1. Jalar Ventas (Aquí es donde salen los Ingresos y Métodos de Pago)
-        const ventas = await prisma.venta.findMany({
-            where: { sesion_id: Number(id), estado: 'ACTIVA' }
-        });
+        // Buscamos ventas y gastos vinculados a esta sesión específica
+        const [ventas, gastos] = await Promise.all([
+            prisma.venta.findMany({ where: { sesion_id: Number(id), estado: 'ACTIVA' } }),
+            prisma.gasto.findMany({ where: { sesion_id: Number(id) } })
+        ]);
 
-        // 2. Jalar Gastos (Aquí es donde salen los Egresos)
-        const gastos = await prisma.gasto.findMany({
-            where: { sesion_id: Number(id) }
-        });
+        const ingresosTotales = ventas.reduce((acc, v) => acc + Number(v.total), 0);
+        const salidasGastos = gastos.reduce((acc, g) => acc + Number(g.monto), 0);
 
-        const totalVentas = ventas.reduce((s, v) => s + Number(v.total), 0);
-        const totalGastos = gastos.reduce((s, g) => s + Number(g.monto), 0);
-
-        const detallePagos = {
-            EFECTIVO: ventas.filter(v => v.metodo_pago === 'EFECTIVO').reduce((s, v) => s + Number(v.total), 0),
-            YAPE: ventas.filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0),
-            VISA: ventas.filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0)
+        // Separación por métodos de pago para el PDF
+        const detalle = {
+            EFECTIVO: ventas.filter(v => v.metodo_pago === 'EFECTIVO').reduce((acc, v) => acc + Number(v.total), 0),
+            YAPE: ventas.filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago)).reduce((acc, v) => acc + Number(v.total), 0),
+            VISA: ventas.filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago)).reduce((acc, v) => acc + Number(v.total), 0)
         };
 
+        // ENVIAMOS EL JSON CON LOS NOMBRES QUE TU FRONTEND BUSCA
         res.json({
-            fondo_inicial: Number(sesion.monto_inicial) || 0,
-            ingresos_totales: totalVentas,
-            egresos_gastos: totalGastos,
-            efectivo_esperado: (Number(sesion.monto_inicial) + detallePagos.EFECTIVO) - totalGastos,
-            efectivo_real: Number(sesion.monto_final) || 0,
-            detalle_pagos: detallePagos
+            ...sesion,
+            ingresos_totales: ingresosTotales,
+            salidas_gastos: salidasGastos,
+            efectivo_esperado: (Number(sesion.monto_inicial) + detalle.EFECTIVO) - salidasGastos,
+            efectivo_real: Number(sesion.monto_final || 0),
+            // Mapeamos también las llaves simples para el PDF
+            EFECTIVO: detalle.EFECTIVO,
+            YAPE: detalle.YAPE,
+            VISA: detalle.VISA
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
