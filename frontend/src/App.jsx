@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Toaster, toast } from 'sonner' // 🔔 1. IMPORTAMOS SONNER
+import { Toaster, toast } from 'sonner'
 import { obtenerProductos } from './services/api'
 import Login from './components/Login'
 import Sidebar from './components/Sidebar'
@@ -12,14 +12,13 @@ import PanelAdmin from './components/PanelAdmin'
 import Kardex from './views/Kardex'
 import Configuracion from './views/Configuracion'
 import Reportes from './views/Reportes'
-
-// 🛡️ IMPORTAMOS EL GUARDIÁN DE SEGURIDAD
 import GuardiaInactividad from './components/GuardiaInactividad'
 
 function App() {
   const [usuario, setUsuario] = useState(null)
   const [vistaActual, setVistaActual] = useState('dashboard')
   const [productos, setProductos] = useState([])
+  const [sidebarAbierto, setSidebarAbierto] = useState(false); // 📱 Control para móvil
 
   useEffect(() => {
     const usuarioGuardado = localStorage.getItem('usuario')
@@ -35,14 +34,14 @@ function App() {
       setProductos(data || [])
     } catch (error) {
       console.error("Error al sincronizar inventario:", error)
-      toast.error("Error de conexión con el servidor") // 🔔 2. EJEMPLO DE USO EN ERROR
+      toast.error("Error de conexión con el servidor")
     }
   }
 
   const manejarLogin = (datosUsuario) => {
     setUsuario(datosUsuario)
     cargarDatos()
-    toast.success(`¡Bienvenido de nuevo, ${datosUsuario.nombre}!`) // 🔔 3. MENSAJE DE BIENVENIDA
+    toast.success(`¡Bienvenido de nuevo, ${datosUsuario.nombre}!`)
   }
 
   const cerrarSesion = () => {
@@ -51,7 +50,6 @@ function App() {
     window.location.reload()
   }
 
-  // 🔔 4. Aseguramos que el Toaster exista incluso en el Login
   if (!usuario) return (
     <>
       <Toaster richColors position="top-right" /> 
@@ -63,22 +61,42 @@ function App() {
   const denegado = <div className="p-10 text-center font-bold text-red-500">🚫 Acceso denegado</div>
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      
-      {/* 🛡️ EL GUARDIÁN INVISIBLE (Solo vigila si hay un usuario logueado) */}
+    <div className="flex min-h-screen bg-slate-50">
       <GuardiaInactividad />
-
-      {/* 🔔 5. EL EMISOR GLOBAL PARA EL RESTO DEL SISTEMA */}
       <Toaster richColors position="top-right" />
       
-      <Sidebar usuario={usuario} setVista={setVistaActual} vistaActual={vistaActual} onLogout={cerrarSesion} />
+      {/* 📱 SIDEBAR RESPONSIVO */}
+      <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 transition-transform duration-300 ease-in-out`}>
+        <Sidebar 
+          usuario={usuario} 
+          setVista={(v) => { setVistaActual(v); setSidebarAbierto(false); }} 
+          vistaActual={vistaActual} 
+          onLogout={cerrarSesion} 
+        />
+      </div>
 
-      <main className="flex-1 p-8 ml-64 min-h-screen" style={{ backgroundColor: '#f1f5f9' }}>
-        <header className="flex justify-between items-center mb-8 p-4 rounded-xl shadow-sm border border-slate-200 bg-white">
-          <h2 className="text-xl font-bold text-slate-700 capitalize">{vistaActual.replace('-', ' ')}</h2>
-          <div className="text-right">
-            <p className="text-sm font-black text-blue-600">{usuario.nombre}</p>
-            <p className="text-xs text-slate-500 font-medium">{usuario.rol}</p>
+      {/* 📱 OVERLAY PARA CERRAR MENÚ EN MÓVIL */}
+      {sidebarAbierto && (
+        <div onClick={() => setSidebarAbierto(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden" />
+      )}
+
+      {/* 📱 CONTENIDO PRINCIPAL ADAPTABLE */}
+      <main className="flex-1 min-h-screen w-full max-w-full overflow-x-hidden p-3 lg:p-8">
+        
+        <header className="flex justify-between items-center mb-6 p-4 rounded-2xl shadow-sm border border-slate-200 bg-white">
+          <div className="flex items-center gap-3">
+            {/* BOTÓN HAMBURGUESA SOLO MÓVIL */}
+            <button onClick={() => setSidebarAbierto(true)} className="lg:hidden p-2 hover:bg-slate-100 rounded-lg text-xl">
+              ☰
+            </button>
+            <h2 className="text-lg lg:text-xl font-black text-slate-700 capitalize tracking-tight">
+              {vistaActual.replace('-', ' ')}
+            </h2>
+          </div>
+          
+          <div className="text-right hidden sm:block">
+            <p className="text-sm font-black text-blue-600 leading-none">{usuario.nombre}</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{usuario.rol}</p>
           </div>
         </header>
 

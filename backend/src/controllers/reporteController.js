@@ -4,21 +4,20 @@ const prisma = new PrismaClient();
 const obtenerResumenGeneral = async (req, res) => {
     try {
         // 1. Configuración de Zona Horaria Perú (Imprescindible para servidores en USA/Oregon)
-        const hoyPeru = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Lima" }));
+        const ahoraPeru = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Lima" }));
 
-        const inicioDia = new Date(hoyPeru);
+        const inicioDia = new Date(ahoraPeru);
         inicioDia.setHours(0, 0, 0, 0);
 
-        const inicioMes = new Date(hoyPeru.getFullYear(), hoyPeru.getMonth(), 1);
-        inicioMes.setHours(0, 0, 0, 0);
+        const inicioMes = new Date(ahoraPeru.getFullYear(), ahoraPeru.getMonth(), 1);
 
         // 2. Ventas de hoy y del mes (Filtramos por estado 'ACTIVA')
         const ventasHoy = await prisma.venta.aggregate({
             _sum: { total: true },
             _count: { id: true },
-            where: {
-                fecha: { gte: inicioDia },
-                estado: 'ACTIVA'
+            where: { 
+                fecha: { gte: inicioDia }, // Solo ventas desde las 00:00 de hoy en Perú
+                estado: 'ACTIVA' 
             }
         });
 
