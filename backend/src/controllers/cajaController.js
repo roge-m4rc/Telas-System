@@ -61,37 +61,41 @@ const registrarGasto = async (req, res) => {
 
 // 4. VER RESUMEN DE CIERRE (La función que causaba el error 404/Crash)
 const obtenerCierreCaja = async (req, res) => {
-    const { id } = req.params; // ID de la caja que seleccionaste en la tabla
+    const { id } = req.params; // El ID que viene de la tabla de Auditoría
 
     try {
         const sesion = await prisma.sesionCaja.findUnique({
             where: { id: Number(id) }
         });
 
-        if (!sesion) return res.status(400).json({ error: 'No existe esa sesión' });
+        if (!sesion) return res.status(404).json({ error: "Sesión no encontrada" });
 
+        // 1. Jalar Ventas (Aquí es donde salen los Ingresos y Métodos de Pago)
         const ventas = await prisma.venta.findMany({
-            where: { 
-                sesion_id: Number(sesion.id),
-                estado: 'ACTIVA' 
-            }
+            where: { sesion_id: Number(id), estado: 'ACTIVA' }
         });
 
-        // Calculamos los totales aquí mismo para enviarlos "masticaditos"
-        const efectivo = ventas.filter(v => v.metodo_pago === 'EFECTIVO').reduce((s, v) => s + Number(v.total), 0);
-        const yape = ventas.filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0);
-        const tarjeta = ventas.filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0);
+        // 2. Jalar Gastos (Aquí es donde salen los Egresos)
+        const gastos = await prisma.gasto.findMany({
+            where: { sesion_id: Number(id) }
+        });
 
-        // Enviamos las llaves EXACTAS que el PDF necesita leer
+        const totalVentas = ventas.reduce((s, v) => s + Number(v.total), 0);
+        const totalGastos = gastos.reduce((s, g) => s + Number(g.monto), 0);
+
+        const detallePagos = {
+            EFECTIVO: ventas.filter(v => v.metodo_pago === 'EFECTIVO').reduce((s, v) => s + Number(v.total), 0),
+            YAPE: ventas.filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0),
+            VISA: ventas.filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago)).reduce((s, v) => s + Number(v.total), 0)
+        };
+
         res.json({
-            monto_inicial: Number(sesion.monto_inicial) || 0,
-            ingresos_totales: ventas.reduce((s, v) => s + Number(v.total), 0),
-            salidas_gastos: 0, // Si no tienes tabla de gastos aún, déjalo en 0
-            efectivo_esperado: (Number(sesion.monto_inicial) || 0) + efectivo,
-            // Estas son las llaves que el PDF busca:
-            EFECTIVO: efectivo,
-            YAPE: yape,
-            VISA: tarjeta
+            fondo_inicial: Number(sesion.monto_inicial) || 0,
+            ingresos_totales: totalVentas,
+            egresos_gastos: totalGastos,
+            efectivo_esperado: (Number(sesion.monto_inicial) + detallePagos.EFECTIVO) - totalGastos,
+            efectivo_real: Number(sesion.monto_final) || 0,
+            detalle_pagos: detallePagos
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
