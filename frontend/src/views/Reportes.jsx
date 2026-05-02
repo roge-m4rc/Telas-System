@@ -114,7 +114,7 @@ export default function Reportes() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-slate-800 p-6 rounded-3xl text-white shadow-xl shadow-slate-200">
                     <p className="text-[10px] uppercase opacity-70 font-black tracking-widest">Total Rango</p>
                     <p className="text-3xl font-black mt-1">S/ {resumen.totalVendido.toFixed(2)}</p>

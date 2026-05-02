@@ -3,29 +3,34 @@ const prisma = new PrismaClient();
 
 const obtenerResumenGeneral = async (req, res) => {
     try {
-        const hoyPeru = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Lima"}));
+        // 1. Configuración de Zona Horaria Perú (Imprescindible para servidores en USA/Oregon)
+        const hoyPeru = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Lima" }));
 
         const inicioDia = new Date(hoyPeru);
         inicioDia.setHours(0, 0, 0, 0);
+
         const inicioMes = new Date(hoyPeru.getFullYear(), hoyPeru.getMonth(), 1);
+        inicioMes.setHours(0, 0, 0, 0);
 
-
-        // Ventas de hoy y del mes
+        // 2. Ventas de hoy y del mes (Filtramos por estado 'ACTIVA')
         const ventasHoy = await prisma.venta.aggregate({
             _sum: { total: true },
             _count: { id: true },
-            where: { 
+            where: {
                 fecha: { gte: inicioDia },
-                estado: 'ACTIVA' // Asegúrate de filtrar solo las activas
+                estado: 'ACTIVA'
             }
         });
 
         const ventasMes = await prisma.venta.aggregate({
             _sum: { total: true },
-            where: { fecha: { gte: inicioMes } }
+            where: {
+                fecha: { gte: inicioMes },
+                estado: 'ACTIVA'
+            }
         });
 
-        // Top 5 productos más vendidos
+        // 3. Top 5 productos más vendidos
         const topDetalles = await prisma.detalleVenta.groupBy({
             by: ['producto_id'],
             _sum: { cantidad: true },
@@ -39,21 +44,20 @@ const obtenerResumenGeneral = async (req, res) => {
                     where: { id: item.producto_id },
                     select: { nombre: true }
                 });
-                return { nombre: p?.nombre, totalVendido: item._sum.cantidad };
+                return { nombre: p?.nombre || 'Producto no encontrado', totalVendido: item._sum.cantidad };
             })
         );
 
-        // Stock crítico (menos de 15 metros)
+        // 4. Stock crítico (menos de 15 metros/unidades)
         const stockBajo = await prisma.producto.findMany({
             where: { stock: { lt: 15 } },
             select: { nombre: true, stock: true },
             orderBy: { stock: 'asc' }
         });
 
-        // --- NUEVO: Gráfico de ventas últimos 7 días ---
-        const sieteDiasAtras = new Date();
+        // 5. Gráfico de ventas últimos 7 días (Ajustado a hoyPeru)
+        const sieteDiasAtras = new Date(inicioDia);
         sieteDiasAtras.setDate(sieteDiasAtras.getDate() - 7);
-        sieteDiasAtras.setHours(0, 0, 0, 0);
 
         const ventasSemanales = await prisma.venta.groupBy({
             by: ['fecha'],
@@ -69,9 +73,8 @@ const obtenerResumenGeneral = async (req, res) => {
             fecha: new Date(v.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
             total: Number(v._sum.total) || 0
         }));
-        // -------------------------------------------------
 
-                // Ventas agrupadas por método de pago (hoy)
+        // 6. Ventas agrupadas por método de pago (Hoy)
         const ventasPorMetodo = await prisma.venta.groupBy({
             by: ['metodo_pago'],
             _sum: { total: true },
@@ -83,29 +86,30 @@ const obtenerResumenGeneral = async (req, res) => {
         });
 
         const graficoMetodos = ventasPorMetodo.map(v => ({
-            nombre: v.metodo_pago,
+            nombre: v.metodo_pago || 'No especificado',
             total: Number(v._sum.total) || 0,
             cantidad: v._count.id
         }));
 
+        // 7. Respuesta final
         res.json({
             hoy: {
-                total: ventasHoy._sum.total || 0,
-                cantidad: ventasHoy._count.id
+                total: Number(ventasHoy._sum.total) || 0,
+                cantidad: ventasHoy._count.id || 0
             },
             mes: {
-                total: ventasMes._sum.total || 0
+                total: Number(ventasMes._sum.total) || 0
             },
             topProductos: productosMasVendidos,
             alertasStock: stockBajo,
-            graficoVentas,// <-- aquí estaba el problema, faltaba esto
-            graficoMetodos  // <-- nuevo
+            graficoVentas,
+            graficoMetodos
         });
 
     } catch (error) {
+        console.error("Error en obtenerResumenGeneral:", error);
         res.status(500).json({ error: error.message });
     }
-    
 };
 
 module.exports = { obtenerResumenGeneral };
