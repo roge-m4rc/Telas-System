@@ -1,9 +1,23 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// 🛠️ FIX: Helper para obtener inicio/fin del día en Perú en UTC
+const obtenerRangoDiaPeru = () => {
+    const ahora = new Date();
+    const fechaPeru = ahora.toLocaleString("en-US", { timeZone: "America/Lima" });
+    const [datePart] = fechaPeru.split(', ');
+    const [month, day, year] = datePart.split('/');
+    
+    // Inicio del día en Perú = 00:00:00 Lima = 05:00:00 UTC
+    const inicio = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 5, 0, 0));
+    // Fin del día en Perú = 23:59:59 Lima = 04:59:59 UTC del día siguiente
+    const fin = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 5 + 23, 59, 59));
+    
+    return { inicio, fin };
+};
+
 const registrarVenta = async (req, res) => {
     console.log("🚨 DATOS QUE LLEGAN DEL FRONTEND:", req.body);
-    // 1. AÑADIMOS metodo_pago AQUÍ 👇
     const { cliente_id, productos, metodo_pago } = req.body; 
     const usuario_id = req.usuario ? req.usuario.id : 1; 
 
@@ -40,7 +54,6 @@ const registrarVenta = async (req, res) => {
                     usuario_id: usuario_id,
                     cliente_id: cliente_id || null,
                     sesion_id: sesionActiva.id, 
-                    // 2. LO GUARDAMOS EN LA BASE DE DATOS AQUÍ 👇
                     metodo_pago: metodo_pago || 'EFECTIVO', 
                     detalles: {
                         create: productos.map(item => ({
@@ -93,17 +106,15 @@ const obtenerVentas = async (req, res) => {
     }
 };
 
+// 🛠️ FIX: Usar rango de Perú en UTC
 const obtenerResumenHoy = async (req, res) => {
     try {
-        const inicioDia = new Date();
-        inicioDia.setHours(0, 0, 0, 0);
-
-        const finDia = new Date();
-        finDia.setHours(23, 59, 59, 999);
+        const { inicio, fin } = obtenerRangoDiaPeru();
 
         const resultado = await prisma.venta.aggregate({
             where: {
-                fecha: { gte: inicioDia, lte: finDia }
+                fecha: { gte: inicio, lte: fin },
+                estado: 'ACTIVA'
             },
             _sum: { total: true },
             _count: { id: true }
@@ -161,12 +172,11 @@ const anularVenta = async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 };
+
 const obtenerReporteDetallado = async (req, res) => {
     const { inicio, fin } = req.query;
 
     try {
-        // Ajustamos las fechas recibidas para que no se desfasen con Oregon
-        // Agregamos T00:00:00 y T23:59:59 para cubrir el día completo en Perú
         const fechaInicio = new Date(`${inicio}T00:00:00-05:00`);
         const fechaFin = new Date(`${fin}T23:59:59-05:00`);
 
@@ -182,7 +192,6 @@ const obtenerReporteDetallado = async (req, res) => {
             orderBy: { fecha: 'desc' },
         });
 
-        // Calculamos el resumen para las cards del frontend
         const totalVendido = ventas.reduce((s, v) => s + Number(v.total), 0);
         
         const metodos = ventas.reduce((acc, v) => {
@@ -204,5 +213,4 @@ const obtenerReporteDetallado = async (req, res) => {
     }
 };
 
-// 👇 ¡ESTA ES LA LÍNEA CLAVE QUE SUELE FALTAR!
 module.exports = { registrarVenta, obtenerVentas, obtenerResumenHoy, anularVenta, obtenerReporteDetallado };

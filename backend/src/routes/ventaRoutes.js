@@ -21,5 +21,6 @@ router.post('/gastos', verificarToken, cajaController.registrarGasto);
 router.get('/cierre-caja', verificarToken, cajaController.obtenerCierreCaja); 
 router.post('/caja/cerrar', verificarToken, cajaController.cerrarCaja);
 router.get('/cajas/historial', cajaController.obtenerHistorialCajas);
+router.get('/cajas/historial', verificarToken, cajaController.obtenerHistorialCajas);
 
 module.exports = router;

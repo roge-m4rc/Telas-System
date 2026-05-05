@@ -18,7 +18,7 @@ function App() {
   const [usuario, setUsuario] = useState(null)
   const [vistaActual, setVistaActual] = useState('dashboard')
   const [productos, setProductos] = useState([])
-  const [sidebarAbierto, setSidebarAbierto] = useState(false); // 📱 Control para móvil
+  const [sidebarAbierto, setSidebarAbierto] = useState(false);
 
   useEffect(() => {
     const usuarioGuardado = localStorage.getItem('usuario')
@@ -61,12 +61,12 @@ function App() {
   const denegado = <div className="p-10 text-center font-bold text-red-500">🚫 Acceso denegado</div>
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50 w-full overflow-hidden">
       <GuardiaInactividad />
       <Toaster richColors position="top-right" />
       
-      {/* 📱 SIDEBAR RESPONSIVO */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 transition-transform duration-300 ease-in-out`}>
+      {/* 🛠️ FIX: h-full overflow-y-auto para scroll interno del sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out flex-shrink-0 h-full overflow-y-auto`}>
         <Sidebar 
           usuario={usuario} 
           setVista={(v) => { setVistaActual(v); setSidebarAbierto(false); }} 
@@ -75,17 +75,14 @@ function App() {
         />
       </div>
 
-      {/* 📱 OVERLAY PARA CERRAR MENÚ EN MÓVIL */}
       {sidebarAbierto && (
         <div onClick={() => setSidebarAbierto(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden" />
       )}
 
-      {/* 📱 CONTENIDO PRINCIPAL ADAPTABLE */}
-      <main className="flex-1 min-h-screen w-full lg:ml-0 p-3 lg:p-8 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-[#f1f5f9]">
         
-        <header className="flex justify-between items-center mb-6 p-4 rounded-2xl shadow-sm border border-slate-200 bg-white">
+        <header className="flex justify-between items-center m-4 p-4 rounded-2xl shadow-sm border border-slate-200 bg-white flex-shrink-0">
           <div className="flex items-center gap-3">
-            {/* BOTÓN HAMBURGUESA SOLO MÓVIL */}
             <button onClick={() => setSidebarAbierto(true)} className="lg:hidden p-2 hover:bg-slate-100 rounded-lg text-xl">
               ☰
             </button>
@@ -100,7 +97,7 @@ function App() {
           </div>
         </header>
 
-        <div className="animate-fadeIn">
+        <div className="animate-fadeIn flex-1 overflow-y-auto p-2 sm:p-4">
           {vistaActual === 'dashboard'     && <Dashboard productos={productos} />}
           {vistaActual === 'punto-venta'   && <PuntoVenta productos={productos} onVenta={cargarDatos} />}
           {vistaActual === 'inventario'    && <InventarioTotal productos={productos} onUpdate={cargarDatos} />}

@@ -1,20 +1,21 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// 1. VERIFICAR ESTADO DE LA CAJA
+const obtenerInicioDiaPeru = () => {
+    const ahora = new Date();
+    const fechaPeru = ahora.toLocaleString("en-US", { timeZone: "America/Lima" });
+    const [datePart] = fechaPeru.split(', ');
+    const [month, day, year] = datePart.split('/');
+    return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 5, 0, 0));
+};
+
 const estadoCaja = async (req, res) => {
     try {
-        const hoy = new Date();
-        // Forzamos el inicio del día en zona horaria Perú
-        const inicioDiaPeru = new Date(hoy.toLocaleString("en-US", { timeZone: "America/Lima" }));
-        inicioDiaPeru.setHours(0, 0, 0, 0);
-
+        const inicioDiaPeru = obtenerInicioDiaPeru();
         const cajaAbierta = await prisma.sesionCaja.findFirst({
             where: { estado: 'ABIERTA' },
             include: { usuario: true }
         });
-
-        // Sumamos ventas solo de hoy (Perú) para el contador
         const ventasHoy = await prisma.venta.aggregate({
             _sum: { total: true },
             where: { 
@@ -22,7 +23,6 @@ const estadoCaja = async (req, res) => {
                 estado: 'ACTIVA'
             }
         });
-
         res.json({
             abierta: !!cajaAbierta,
             datos: cajaAbierta,
@@ -33,37 +33,31 @@ const estadoCaja = async (req, res) => {
     }
 };
 
-// 2. ABRIR CAJA
 const abrirCaja = async (req, res) => {
     const { monto_inicial } = req.body;
     const usuario_id = req.usuario ? req.usuario.id : 1;
-
     try {
         const existente = await prisma.sesionCaja.findFirst({
             where: { usuario_id, estado: 'ABIERTA' }
         });
         if (existente) return res.status(400).json({ error: 'Ya tienes una caja abierta.' });
-
         const nuevaSesion = await prisma.sesionCaja.create({
             data: { monto_inicial: parseFloat(monto_inicial) || 0, usuario_id }
         });
-        res.status(201).json({ mensaje: 'Caja abierta con éxito', sesion: nuevaSesion });
+        res.status(201).json({ mensaje: 'Caja abierta con exito', sesion: nuevaSesion });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
 
-// 3. REGISTRAR GASTO
 const registrarGasto = async (req, res) => {
     const { descripcion, monto } = req.body;
     const usuario_id = req.usuario ? req.usuario.id : 1;
-
     try {
         const sesionActiva = await prisma.sesionCaja.findFirst({
             where: { usuario_id, estado: 'ABIERTA' }
         });
         if (!sesionActiva) return res.status(400).json({ error: 'Debes abrir la caja primero.' });
-
         const nuevoGasto = await prisma.gasto.create({
             data: { 
                 descripcion, 
@@ -72,13 +66,12 @@ const registrarGasto = async (req, res) => {
                 sesion_id: sesionActiva.id 
             }
         });
-        res.status(201).json({ mensaje: '✅ Gasto registrado', gasto: nuevoGasto });
+        res.status(201).json({ mensaje: 'Gasto registrado', gasto: nuevoGasto });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 };
 
-// 4. VER RESUMEN DE CIERRE (La función que causaba el error 404/Crash)
 const obtenerCierreCaja = async (req, res) => {
     const { id } = req.params;
     try {
@@ -86,10 +79,8 @@ const obtenerCierreCaja = async (req, res) => {
             where: { id: Number(id) },
             include: { usuario: true }
         });
+        if (!sesion) return res.status(404).json({ error: "No existe la sesion" });
 
-        if (!sesion) return res.status(404).json({ error: "No existe la sesión" });
-
-        // Buscamos ventas y gastos vinculados a esta sesión específica
         const [ventas, gastos] = await Promise.all([
             prisma.venta.findMany({ where: { sesion_id: Number(id), estado: 'ACTIVA' } }),
             prisma.gasto.findMany({ where: { sesion_id: Number(id) } })
@@ -98,21 +89,18 @@ const obtenerCierreCaja = async (req, res) => {
         const ingresosTotales = ventas.reduce((acc, v) => acc + Number(v.total), 0);
         const salidasGastos = gastos.reduce((acc, g) => acc + Number(g.monto), 0);
 
-        // Separación por métodos de pago para el PDF
         const detalle = {
             EFECTIVO: ventas.filter(v => v.metodo_pago === 'EFECTIVO').reduce((acc, v) => acc + Number(v.total), 0),
-            YAPE: ventas.filter(v => ['YAPE', 'PLIN'].includes(v.metodo_pago)).reduce((acc, v) => acc + Number(v.total), 0),
-            VISA: ventas.filter(v => ['VISA', 'TARJETA'].includes(v.metodo_pago)).reduce((acc, v) => acc + Number(v.total), 0)
+            YAPE: ventas.filter(v => v.metodo_pago === 'YAPE').reduce((acc, v) => acc + Number(v.total), 0),
+            VISA: ventas.filter(v => v.metodo_pago === 'VISA').reduce((acc, v) => acc + Number(v.total), 0)
         };
 
-        // ENVIAMOS EL JSON CON LOS NOMBRES QUE TU FRONTEND BUSCA
         res.json({
             ...sesion,
             ingresos_totales: ingresosTotales,
             salidas_gastos: salidasGastos,
             efectivo_esperado: (Number(sesion.monto_inicial) + detalle.EFECTIVO) - salidasGastos,
-            efectivo_real: Number(sesion.monto_final || 0),
-            // Mapeamos también las llaves simples para el PDF
+            efectivo_real: Number(sesion.monto_final_real || 0),
             EFECTIVO: detalle.EFECTIVO,
             YAPE: detalle.YAPE,
             VISA: detalle.VISA
@@ -122,104 +110,149 @@ const obtenerCierreCaja = async (req, res) => {
     }
 };
 
-// 5. CERRAR CAJA DEFINITIVAMENTE
+// CERRAR CAJA - VERSION CORREGIDA
 const cerrarCaja = async (req, res) => {
-    console.log("📦 DATOS RECIBIDOS PARA CERRAR CAJA:", req.body);
-    
     try {
-        // Atrapamos el dinero físico, venga como venga del frontend (para evitar el NaN)
-        const dineroFisico = req.body.monto_final_real ?? req.body.monto_final ?? 0;
+        // 1. Extraer dinero fisico del prompt
+        let dineroFisico = 0;
+        if (req.body.monto_final_real !== undefined) dineroFisico = req.body.monto_final_real;
+        else if (req.body.monto_final !== undefined) dineroFisico = req.body.monto_final;
+        else if (req.body.efectivo_real !== undefined) dineroFisico = req.body.efectivo_real;
         
-        const usuario_id = req.usuario?.id || req.usuario || 1; 
+        dineroFisico = parseFloat(dineroFisico) || 0;
 
+        // 2. Identificar usuario
+        const usuario_id = req.usuario?.id || req.usuario || 1;
+
+        // 3. Buscar sesion activa
         const sesion = await prisma.sesionCaja.findFirst({
             where: { usuario_id: parseInt(usuario_id), estado: 'ABIERTA' }
         });
 
-        if (!sesion) return res.status(404).json({ error: "No hay sesión abierta." });
+        if (!sesion) {
+            return res.status(404).json({ error: "No hay sesion abierta." });
+        }
 
-        // 📊 CALCULAMOS EL RESUMEN DEL DÍA/TURNO
+        // 4. Buscar VENTAS de esta sesion
         const ventas = await prisma.venta.findMany({
             where: { sesion_id: sesion.id, estado: 'ACTIVA' }
         });
 
+        // 5. Buscar GASTOS de esta sesion
         const gastos = await prisma.gasto.findMany({
             where: { sesion_id: sesion.id }
         });
 
-        const totalEfectivo = ventas.filter(v => v.metodo_pago === 'EFECTIVO').reduce((s, v) => s + v.total, 0);
-        const totalYape = ventas.filter(v => v.metodo_pago === 'YAPE').reduce((s, v) => s + v.total, 0);
-        const totalVisa = ventas.filter(v => v.metodo_pago === 'VISA').reduce((s, v) => s + v.total, 0);
-        const totalGastos = gastos.reduce((s, g) => s + g.monto, 0);
+        // 6. Calcular totales por metodo
+        const totalEfectivo = ventas
+            .filter(v => v.metodo_pago === 'EFECTIVO')
+            .reduce((s, v) => s + (Number(v.total) || 0), 0);
+            
+        const totalYape = ventas
+            .filter(v => v.metodo_pago === 'YAPE')
+            .reduce((s, v) => s + (Number(v.total) || 0), 0);
+            
+        const totalVisa = ventas
+            .filter(v => v.metodo_pago === 'VISA')
+            .reduce((s, v) => s + (Number(v.total) || 0), 0);
+            
+        const totalGastos = gastos.reduce((s, g) => s + (Number(g.monto) || 0), 0);
 
-        const montoEsperado = sesion.monto_inicial + totalEfectivo - totalGastos;
+        // 7. Calcular totales finales
+        const totalDigitales = totalYape + totalVisa;
+        const totalVendido = totalEfectivo + totalDigitales;
+        const montoEsperadoEfectivo = (Number(sesion.monto_inicial) || 0) + totalEfectivo - totalGastos;
+        const diferencia = dineroFisico - montoEsperadoEfectivo;
 
-        // 🚨 EL ARREGLO: Usamos los nombres exactos de tu tabla SesionCaja
+        // 8. Guardar en BD
         await prisma.sesionCaja.update({
             where: { id: sesion.id },
             data: {
                 estado: 'CERRADA',
                 fecha_cierre: new Date(),
-                monto_final_real: parseFloat(dineroFisico),     // Lo que contó el vendedor
-                monto_final_esperado: montoEsperado             // Lo que el sistema calculó
+                monto_final_real: dineroFisico,
+                monto_final_esperado: montoEsperadoEfectivo
             }
         });
 
-        // Enviamos el ticket al frontend
+        // 9. Responder con todo el desglose
         res.json({
             mensaje: "Caja cerrada exitosamente",
             resumen: {
                 vendedor: req.usuario?.nombre || 'Usuario',
                 fecha: new Date(),
-                fondoInicial: sesion.monto_inicial,
+                fondoInicial: Number(sesion.monto_inicial) || 0,
                 ventasEfectivo: totalEfectivo,
                 ventasYape: totalYape,
                 ventasVisa: totalVisa,
+                totalDigitales: totalDigitales,
                 gastos: totalGastos,
-                montoEsperado: montoEsperado,
-                montoReal: parseFloat(dineroFisico),
-                diferencia: parseFloat(dineroFisico) - montoEsperado
+                montoEsperado: montoEsperadoEfectivo,
+                montoReal: dineroFisico,
+                diferencia: diferencia,
+                totalVendido: totalVendido
             }
         });
 
     } catch (error) {
-        console.error("🚨 ERROR CRÍTICO AL CERRAR CAJA:", error);
+        console.error("ERROR CRITICO AL CERRAR CAJA:", error);
         res.status(500).json({ error: error.message });
     }
 };
+
+// HISTORIAL - VERSION CORREGIDA
 const obtenerHistorialCajas = async (req, res) => {
     try {
-        // CORRECCIÓN: El modelo real es sesionCaja
-        const historial = await prisma.sesionCaja.findMany({
-            orderBy: { fecha_apertura: 'desc' }, 
-            // Si tienes relación con la tabla usuario, la incluimos
-            include: { usuario: true } 
+        const sesiones = await prisma.sesionCaja.findMany({
+            where: { estado: 'CERRADA' },
+            include: { usuario: { select: { nombre: true } } },
+            orderBy: { fecha_apertura: 'desc' }
         });
 
-        // Formateamos los datos para que coincidan con lo que espera el Frontend
-        const historialFormateado = historial.map(c => ({
-            id: c.id,
-            fecha_apertura: c.fecha_apertura,
-            fecha_cierre: c.fecha_cierre,
-            monto_inicial: c.monto_inicial,
-            monto_esperado: c.monto_final_esperado, // Mapeado al nombre de tu BD
-            monto_final: c.monto_final_real,       // Mapeado al nombre de tu BD
-            usuario: c.usuario
+        const sesionesConDetalle = await Promise.all(sesiones.map(async (s) => {
+            const ventas = await prisma.venta.findMany({
+                where: { sesion_id: s.id, estado: 'ACTIVA' }
+            });
+            
+            const gastos = await prisma.gasto.aggregate({
+                _sum: { monto: true },
+                where: { sesion_id: s.id }
+            });
+
+            const EFECTIVO = ventas
+                .filter(v => v.metodo_pago === 'EFECTIVO')
+                .reduce((a, v) => a + (Number(v.total) || 0), 0);
+            
+            const YAPE = ventas
+                .filter(v => v.metodo_pago === 'YAPE')
+                .reduce((a, v) => a + (Number(v.total) || 0), 0);
+            
+            const VISA = ventas
+                .filter(v => v.metodo_pago === 'VISA')
+                .reduce((a, v) => a + (Number(v.total) || 0), 0);
+            
+            const ingresos_totales = EFECTIVO + YAPE + VISA;
+            const salidas_gastos = Number(gastos._sum?.monto || 0);
+            const efectivo_esperado = (Number(s.monto_inicial) || 0) + EFECTIVO - salidas_gastos;
+
+            return {
+                ...s,
+                EFECTIVO,
+                YAPE,
+                VISA,
+                ingresos_totales,
+                salidas_gastos,
+                efectivo_esperado,
+                efectivo_real: Number(s.monto_final_real || 0),
+                monto_esperado: efectivo_esperado
+            };
         }));
 
-        res.json(historialFormateado);
+        res.json(sesionesConDetalle);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al obtener historial de cajas' });
+        console.error("ERROR en historial:", error);
+        res.status(500).json({ error: error.message });
     }
 };
 
-// 👇 EXPORTACIÓN COMPLETA REPARADA
-module.exports = { 
-    estadoCaja, 
-    abrirCaja, 
-    registrarGasto, 
-    obtenerCierreCaja, 
-    cerrarCaja, 
-    obtenerHistorialCajas // <- ¡Faltaba agregarla aquí!
-};
+module.exports = { estadoCaja, abrirCaja, registrarGasto, obtenerCierreCaja, cerrarCaja, obtenerHistorialCajas };

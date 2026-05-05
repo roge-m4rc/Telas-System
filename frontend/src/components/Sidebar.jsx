@@ -23,7 +23,7 @@ export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
 
     return (
         <aside 
-            className={`relative bg-slate-900 text-white min-h-screen transition-all duration-300 flex flex-col ${
+            className={`relative bg-slate-900 h-full text-white min-h-screen transition-all duration-300 flex flex-col ${
                 expandido ? 'w-64' : 'w-20'
             }`}
         >
