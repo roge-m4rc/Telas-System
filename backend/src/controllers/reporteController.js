@@ -15,7 +15,7 @@ const obtenerResumenGeneral = async (req, res) => {
         inicioMes.setDate(1);
         inicioMes.setHours(0, 0, 0, 0);
         
-        // 2. Ventas de hoy (filtramos por estado 'ACTIVA')
+        // 2. Ventas de hoy (usando Prisma sin SQL crudo)
         const ventasHoy = await prisma.venta.aggregate({
             _sum: { total: true },
             _count: { id: true },
@@ -44,45 +44,57 @@ const obtenerResumenGeneral = async (req, res) => {
             orderBy: { stock: 'asc' }
         });
 
-        // 5. Gráfico de ventas últimos 7 días
+        // 5. Gráfico de ventas últimos 7 días (usando Prisma, no SQL crudo)
         const sieteDiasAtras = new Date(inicioDia);
         sieteDiasAtras.setDate(sieteDiasAtras.getDate() - 7);
 
-        const ventasSemanales = await prisma.$queryRaw`
-            SELECT 
-                DATE(fecha) as fecha,
-                SUM(total) as total
-            FROM Ventas
-            WHERE fecha >= ${sieteDiasAtras}
-                AND estado = 'ACTIVA'
-            GROUP BY DATE(fecha)
-            ORDER BY fecha ASC
-        `;
+        // Obtener ventas de los últimos 7 días
+        const ventasSemanalesRaw = await prisma.venta.findMany({
+            where: {
+                fecha: { gte: sieteDiasAtras },
+                estado: 'ACTIVA'
+            },
+            select: { fecha: true, total: true },
+            orderBy: { fecha: 'asc' }
+        });
 
-        const graficoVentas = Array.isArray(ventasSemanales) ? ventasSemanales.map(v => ({
-            fecha: new Date(v.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
-            total: Number(v.total) || 0
-        })) : [];
+        // Agrupar por fecha en el frontend (evitamos SQL complejo)
+        const agrupadoPorFecha = {};
+        ventasSemanalesRaw.forEach(v => {
+            const fechaKey = new Date(v.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+            agrupadoPorFecha[fechaKey] = (agrupadoPorFecha[fechaKey] || 0) + Number(v.total);
+        });
 
-        // 6. Ventas agrupadas por método de pago (Hoy)
-        const ventasPorMetodo = await prisma.$queryRaw`
-            SELECT 
-                metodo_pago,
-                SUM(total) as total,
-                COUNT(id) as cantidad
-            FROM Ventas
-            WHERE fecha >= ${inicioDia}
-                AND estado = 'ACTIVA'
-            GROUP BY metodo_pago
-        `;
+        const graficoVentas = Object.keys(agrupadoPorFecha).map(fecha => ({
+            fecha: fecha,
+            total: agrupadoPorFecha[fecha]
+        }));
 
-        const graficoMetodos = Array.isArray(ventasPorMetodo) ? ventasPorMetodo.map(v => ({
-            nombre: v.metodo_pago || 'No especificado',
-            total: Number(v.total) || 0,
-            cantidad: Number(v.cantidad) || 0
-        })) : [];
+        // 6. Ventas agrupadas por método de pago (Hoy) - usando Prisma
+        const ventasHoyRaw = await prisma.venta.findMany({
+            where: {
+                fecha: { gte: inicioDia },
+                estado: 'ACTIVA'
+            },
+            select: { metodo_pago: true, total: true }
+        });
 
-        // 7. Top 5 productos más vendidos (usando Prisma directamente)
+        const agrupadoPorMetodo = {};
+        ventasHoyRaw.forEach(v => {
+            const metodo = v.metodo_pago || 'No especificado';
+            agrupadoPorMetodo[metodo] = {
+                total: (agrupadoPorMetodo[metodo]?.total || 0) + Number(v.total),
+                cantidad: (agrupadoPorMetodo[metodo]?.cantidad || 0) + 1
+            };
+        });
+
+        const graficoMetodos = Object.keys(agrupadoPorMetodo).map(metodo => ({
+            nombre: metodo,
+            total: agrupadoPorMetodo[metodo].total,
+            cantidad: agrupadoPorMetodo[metodo].cantidad
+        }));
+
+        // 7. Top 5 productos más vendidos
         const topDetalles = await prisma.detalleVenta.groupBy({
             by: ['producto_id'],
             _sum: { cantidad: true },
