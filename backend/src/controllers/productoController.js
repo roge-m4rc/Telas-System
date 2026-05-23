@@ -178,12 +178,10 @@ const obtenerResumenDashboard = async (req, res) => {
         // Stock Crítico
         const alertasStock = await prisma.producto.findMany({
             where: { 
-                activo: true,       // 👻 ¡El escudo anti-fantasmas!
-                stock: { lt: 15 }   // Avisa si baja de 15 metros
+                activo: true,
+                stock: { lt: 15 }
             },
-            orderBy: {
-                stock: 'asc'        // Ordena para que los más vacíos salgan primero
-            },
+            orderBy: { stock: 'asc' },
             select: { nombre: true, stock: true }
         });
 
@@ -209,10 +207,10 @@ const obtenerResumenDashboard = async (req, res) => {
             mes: { total: ventasMes._sum.total || 0 },
             alertasStock,
             graficoVentas,
-            topProductos: [] 
+            topProductos: []
         });
     } catch (e) {
-        console.error(e);
+        console.error("Error en obtenerResumenDashboard:", e);
         res.status(500).json({ error: e.message });
     }
 };
