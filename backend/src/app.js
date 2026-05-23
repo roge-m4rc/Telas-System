@@ -3,14 +3,15 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') }); 
 
-// 1. IMPORTACIONES (Todas agrupadas y sin repetir)
+// 1. IMPORTACIONES
 const authRoutes = require('./routes/authRoutes');
 const opcionesRoutes = require('./routes/opcionesRoutes');
 const configRoutes = require('./routes/configRoutes');
 const auditoriaRoutes = require('./routes/auditoriaRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
 const productoRoutes = require('./routes/productoRoutes');
-const ventaRoutes = require('./routes/ventaRoutes'); 
+const ventaRoutes = require('./routes/ventaRoutes');
+const atributoRoutes = require('./routes/atributoRoutes'); // 👈 NUEVA
 
 const app = express();
 
@@ -25,7 +26,7 @@ app.get('/', (req, res) => {
     res.send('API del Sistema de Inventario de Telas funcionando 🚀');
 });
 
-// 4. REGISTRO DE RUTAS DE LA API (Todas juntas para mantener el orden)
+// 4. REGISTRO DE RUTAS DE LA API
 app.use('/api/auth', authRoutes);
 app.use('/api/opciones', opcionesRoutes);
 app.use('/api/configuracion', configRoutes);
@@ -33,8 +34,9 @@ app.use('/api/auditoria', auditoriaRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/productos', productoRoutes);
 app.use('/api/ventas', ventaRoutes);
+app.use('/api/atributos', atributoRoutes); // 👈 NUEVA
 
-// 5. ENCENDIDO DEL SERVIDOR (¡Siempre debe ser lo último del archivo!)
+// 5. ENCENDIDO DEL SERVIDOR
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

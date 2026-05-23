@@ -4,13 +4,12 @@ const prisma = new PrismaClient();
 const obtenerResumenGeneral = async (req, res) => {
     try {
         // 1. Configuración de Zona Horaria Perú (Imprescindible para servidores en USA/Oregon)
-        const ahoraPeru = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Lima" }));
-
-        const inicioDia = new Date(ahoraPeru);
-        inicioDia.setHours(0, 0, 0, 0);
-
-        const inicioMes = new Date(ahoraPeru.getFullYear(), ahoraPeru.getMonth(), 1);
-
+        const ahora = new Date();
+// Offset de Perú: UTC-5 = -300 minutos
+        const offsetPeru = -5 * 60;
+        const offsetLocal = ahora.getTimezoneOffset();
+        const diffMs = (offsetLocal + offsetPeru) * 60 * 1000;
+        
         // 2. Ventas de hoy y del mes (Filtramos por estado 'ACTIVA')
         const ventasHoy = await prisma.venta.aggregate({
             _sum: { total: true },

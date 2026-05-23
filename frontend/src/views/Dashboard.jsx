@@ -8,6 +8,7 @@ export default function Dashboard({ productos = [] }) {
     const [stats, setStats] = useState(null);
     const [cargando, setCargando] = useState(true);
     const [montado, setMontado] = useState(false);
+    const [cajaActual, setCajaActual] = useState(null);
 
     const [mostrarGasto, setMostrarGasto] = useState(false);
     const [gasto, setGasto] = useState({ descripcion: '', monto: '' });
@@ -28,9 +29,38 @@ export default function Dashboard({ productos = [] }) {
         .filter(p => p.stock < 15)
         .sort((a, b) => a.stock - b.stock);
 
+    // Verificar estado de la caja
+    const verificarCajaActual = async () => {
+        try {
+            const res = await api.get('/ventas/caja/estado');
+            console.log("🔍 Estado de caja:", res.data);
+            // Normalizamos el dato
+            if (res.data) {
+                setCajaActual({
+                    abierta: res.data.abierta === true || res.data.estado === 'ABIERTA',
+                    ...res.data
+                });
+            } else {
+                setCajaActual({ abierta: false });
+            }
+        } catch (error) {
+            console.error("Error al verificar caja:", error);
+            setCajaActual({ abierta: false });
+        }
+    };
+
     useEffect(() => {
         cargarStats();
+        verificarCajaActual();
         setMontado(true);
+    }, []);
+
+    // Refrescar estado cada 30 segundos
+    useEffect(() => {
+        const interval = setInterval(() => {
+            verificarCajaActual();
+        }, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const cargarStats = async () => {
@@ -55,6 +85,7 @@ export default function Dashboard({ productos = [] }) {
             setMostrarGasto(false);
             setGasto({ descripcion: '', monto: '' });
             cargarStats();
+            verificarCajaActual(); // Refrescar estado de caja
         } catch (error) {
             toast.error("Error al registrar gasto: " + (error.response?.data?.error || ""));
         }
@@ -101,7 +132,6 @@ export default function Dashboard({ productos = [] }) {
         const fechaCierre = caja.fecha_cierre ? new Date(caja.fecha_cierre).toLocaleDateString('es-PE') : 'Sin Cierre';
         const horaCierre = caja.fecha_cierre ? new Date(caja.fecha_cierre).toLocaleTimeString('es-PE') : '--:--';
 
-        // HEADER
         doc.setFillColor(30, 41, 59);
         doc.rect(0, 0, pageWidth, 30, 'F');
         doc.setTextColor(255, 255, 255);
@@ -113,7 +143,6 @@ export default function Dashboard({ productos = [] }) {
         doc.text(`Generado: ${new Date().toLocaleString('es-PE')}`, pageWidth / 2, 28, { align: 'center' });
         y = 38;
 
-        // INFO GENERAL
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -138,11 +167,9 @@ export default function Dashboard({ productos = [] }) {
         });
 
         y += 3;
-        doc.setDrawColor(200);
         doc.line(15, y, pageWidth - 15, y);
         y += 8;
 
-        // EFECTIVO EN CAJA
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -170,7 +197,6 @@ export default function Dashboard({ productos = [] }) {
         linea('- Gastos:', `S/ ${egresos.toFixed(2)}`, false, [220, 38, 38]);
 
         y += 1;
-        doc.setDrawColor(200);
         doc.line(20, y - 2, pageWidth - 20, y - 2);
         y += 4;
 
@@ -202,11 +228,9 @@ export default function Dashboard({ productos = [] }) {
         }
         y += 12;
 
-        doc.setDrawColor(200);
         doc.line(15, y, pageWidth - 15, y);
         y += 8;
 
-        // VENTAS DIGITALES
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -221,17 +245,14 @@ export default function Dashboard({ productos = [] }) {
         linea('Visa / Tarjeta:', `S/ ${visa.toFixed(2)}`, false, [124, 58, 237]);
 
         y += 1;
-        doc.setDrawColor(200);
         doc.line(20, y - 2, pageWidth - 20, y - 2);
         y += 4;
         linea('TOTAL DIGITAL:', `S/ ${totalDigitales.toFixed(2)}`, true, [124, 58, 237]);
 
         y += 8;
-        doc.setDrawColor(200);
         doc.line(15, y, pageWidth - 15, y);
         y += 8;
 
-        // RESUMEN DEL DIA
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -273,255 +294,273 @@ export default function Dashboard({ productos = [] }) {
     if (!stats) return <div className="p-10 text-center text-red-500 font-bold">Error de conexion.</div>;
 
     return (
-        <div className="space-y-6 p-2 sm:p-4">
+        <>
+            {/* ESTILOS DEL SCROLLBAR PERSONALIZADO */}
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: #f1f1f1;
+                    border-radius: 10px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #fecaca;
+                    border-radius: 10px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #f87171;
+                }
+            `}</style>
 
-            {/* CABECERA */}
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100 gap-4">
-                <div>
-                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Panel de Control</h2>
-                    <p className="text-sm text-slate-500 font-medium italic">Bienvenido, {usuario.nombre}</p>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-                    <button onClick={() => setMostrarGasto(true)} className="w-full sm:w-auto bg-orange-100 text-orange-700 px-6 py-3 rounded-2xl font-bold text-sm hover:bg-orange-200 transition-colors">
-                        Registrar Gasto
-                    </button>
-                    {esAdmin && (
-                        <button onClick={abrirHistorialCajas} className="w-full sm:w-auto bg-slate-800 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg hover:bg-slate-700 transition-colors">
-                            Auditoria de Cajas
-                        </button>
-                    )}
-                </div>
-            </div>
+            <div className="space-y-6 p-2 sm:p-4">
 
-            {/* CARDS — diferenciadas por rol */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-
-                {/* Ventas hoy — todos lo ven */}
-                <div className="bg-blue-600 p-6 rounded-3xl text-white shadow-xl shadow-blue-100">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Ventas Hoy</p>
-                    <h3 className="text-3xl font-black mt-2">S/ {stats.hoy?.total?.toFixed(2) || '0.00'}</h3>
-                    <p className="text-[10px] mt-2 bg-white/20 inline-block px-2 py-1 rounded-full">{stats.hoy?.cantidad || 0} operaciones</p>
-                </div>
-
-                {/* Mes actual — solo admin | Turno — vendedor */}
-                {esAdmin ? (
-                    <div className="bg-emerald-600 p-6 rounded-3xl text-white shadow-xl shadow-emerald-100">
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Mes Actual</p>
-                        <h3 className="text-3xl font-black mt-2">S/ {stats.mes?.total?.toFixed(2) || '0.00'}</h3>
-                        <p className="text-[10px] mt-2 opacity-70 font-medium">Acumulado mensual</p>
+                {/* CABECERA */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100 gap-4">
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Panel de Control</h2>
+                        <p className="text-sm text-slate-500 font-medium italic">Bienvenido, {usuario.nombre}</p>
                     </div>
-                ) : (
-                    <div className="bg-purple-600 p-6 rounded-3xl text-white shadow-xl shadow-purple-100">
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Estado del Turno</p>
-                        <h3 className="text-2xl font-black mt-3">Caja Abierta</h3>
-                        <p className="text-[10px] mt-2 bg-white/20 inline-block px-2 py-1 rounded-full">Turno en curso</p>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                        {/* ✅ BOTÓN DE GASTO: SOLO SI HAY CAJA ABIERTA */}
+                        {cajaActual?.abierta === true && (
+                            <button 
+                                onClick={() => setMostrarGasto(true)} 
+                                className="w-full sm:w-auto bg-orange-100 text-orange-700 px-6 py-3 rounded-2xl font-bold text-sm hover:bg-orange-200 transition-colors"
+                            >
+                                Registrar Gasto
+                            </button>
+                        )}
+                        {esAdmin && (
+                            <button onClick={abrirHistorialCajas} className="w-full sm:w-auto bg-slate-800 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg hover:bg-slate-700 transition-colors">
+                                Auditoria de Cajas
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* DEBUG: Mostrar estado actual (borrar después) 
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-2 text-xs text-center font-mono">
+                    🧪 Debug: Caja está {cajaActual?.abierta === true ? 'ABIERTA ✅' : 'CERRADA ❌'} 
+                    {cajaActual && <span className="ml-2 text-slate-400">| Datos: {JSON.stringify(cajaActual)}</span>}
+                </div>*/}
+
+                {/* CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+                    <div className="bg-blue-600 p-6 rounded-3xl text-white shadow-xl shadow-blue-100">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Ventas Hoy</p>
+                        <h3 className="text-3xl font-black mt-2">S/ {stats.hoy?.total?.toFixed(2) || '0.00'}</h3>
+                        <p className="text-[10px] mt-2 bg-white/20 inline-block px-2 py-1 rounded-full">{stats.hoy?.cantidad || 0} operaciones</p>
+                    </div>
+
+                    {esAdmin ? (
+                        <div className="bg-emerald-600 p-6 rounded-3xl text-white shadow-xl shadow-emerald-100">
+                            <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Mes Actual</p>
+                            <h3 className="text-3xl font-black mt-2">S/ {stats.mes?.total?.toFixed(2) || '0.00'}</h3>
+                            <p className="text-[10px] mt-2 opacity-70 font-medium">Acumulado mensual</p>
+                        </div>
+                    ) : (
+                        <div className="bg-purple-600 p-6 rounded-3xl text-white shadow-xl shadow-purple-100">
+                            <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Estado del Turno</p>
+                            <h3 className="text-2xl font-black mt-3">{cajaActual?.abierta ? 'Caja Abierta' : 'Caja Cerrada'}</h3>
+                            <p className="text-[10px] mt-2 bg-white/20 inline-block px-2 py-1 rounded-full">{cajaActual?.abierta ? 'Turno en curso' : 'Inicia turno para vender'}</p>
+                        </div>
+                    )}
+
+                    <div className="bg-amber-500 p-6 rounded-3xl text-white shadow-xl shadow-amber-100">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Alertas Stock</p>
+                        <h3 className="text-3xl font-black mt-2">{alertasStockReales.length}</h3>
+                        <p className="text-[10px] mt-1 font-bold">Telas bajo 15m</p>
+                    </div>
+                </div>
+
+                {/* GRÁFICO (solo admin) */}
+                {esAdmin && (
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                        <h3 className="text-lg font-black text-slate-800 mb-6">Tendencia (7 dias)</h3>
+                        <div className="h-[300px] w-full">
+                            {montado && stats.graficoVentas?.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={stats.graficoVentas}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="fecha" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                                        <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '15px', border: 'none' }} />
+                                        <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                                            {stats.graficoVentas.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={index === stats.graficoVentas.length - 1 ? '#2563eb' : '#cbd5e1'} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-slate-400 italic text-sm">Sin datos para graficar</div>
+                            )}
+                        </div>
                     </div>
                 )}
 
-                {/* Alertas stock — todos lo ven */}
-                <div className="bg-amber-500 p-6 rounded-3xl text-white shadow-xl shadow-amber-100">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Alertas Stock</p>
-                    <h3 className="text-3xl font-black mt-2">{alertasStockReales.length}</h3>
-                    <p className="text-[10px] mt-1 font-bold">Telas bajo 15m</p>
-                </div>
-
-            </div>
-
-            {/* GRAFICO — solo admin */}
-            {esAdmin && (
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                    <h3 className="text-lg font-black text-slate-800 mb-6">Tendencia (7 dias)</h3>
-                    <div className="h-[300px] w-full">
-                        {montado && stats.graficoVentas?.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={stats.graficoVentas}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="fecha" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '15px', border: 'none' }} />
-                                    <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                                        {stats.graficoVentas.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={index === stats.graficoVentas.length - 1 ? '#2563eb' : '#cbd5e1'} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                {/* ALERTAS DE INVENTARIO CON SCROLL */}
+                <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-4">
+                    <h3 className="text-red-600 font-bold mb-3">⚠️ Alertas de Inventario</h3>
+                    <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        {alertasStockReales.length > 0 ? (
+                            alertasStockReales.map(prod => (
+                                <div key={prod.id} className="flex justify-between p-2 border-b text-sm">
+                                    <span>{prod.nombre}</span>
+                                    <span className="font-bold text-red-500">{prod.stock} mts</span>
+                                </div>
+                            ))
                         ) : (
-                            <div className="h-full flex items-center justify-center text-slate-400 italic text-sm">Sin datos para graficar</div>
+                            <p className="text-slate-400 text-sm">Todo el stock está normal.</p>
                         )}
                     </div>
                 </div>
-            )}
 
-            {/* ALERTAS DE INVENTARIO — todos lo ven */}
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h4 className="text-lg font-black text-red-600 mb-4">Alertas de Inventario</h4>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[300px]">
-                        <thead className="text-[10px] uppercase font-black text-slate-400">
-                            <tr><th className="p-2">Producto</th><th className="p-2 text-right">Stock</th></tr>
-                        </thead>
-                        <tbody className="text-sm">
-                            {alertasStockReales.length === 0 ? (
-                                <tr><td colSpan="2" className="p-4 text-center text-slate-400">Todo en orden</td></tr>
-                            ) : (
-                                alertasStockReales.map((p, i) => (
-                                    <tr key={i} className="border-b border-slate-50">
-                                        <td className="p-3 font-bold text-slate-700">{p.nombre}</td>
-                                        <td className="p-3 text-right text-red-600 font-black">{p.stock}m</td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* MODAL GASTO */}
-            {mostrarGasto && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm">
-                        <h2 className="text-xl font-black mb-4">Registrar Gasto</h2>
-                        <form onSubmit={registrarGasto} className="space-y-4">
-                            <input required type="text" placeholder="Concepto..." className="w-full border-2 border-slate-100 p-3 rounded-xl outline-none focus:border-blue-500" value={gasto.descripcion} onChange={(e) => setGasto({ ...gasto, descripcion: e.target.value })} />
-                            <input required type="number" step="0.1" placeholder="Monto S/..." className="w-full border-2 border-slate-100 p-3 rounded-xl font-mono focus:border-blue-500" value={gasto.monto} onChange={(e) => setGasto({ ...gasto, monto: e.target.value })} />
-                            <div className="flex gap-2">
-                                <button type="button" onClick={() => setMostrarGasto(false)} className="flex-1 bg-slate-100 p-3 rounded-xl font-bold">Cerrar</button>
-                                <button type="submit" className="flex-1 bg-orange-500 text-white p-3 rounded-xl font-bold">Guardar</button>
-                            </div>
-                        </form>
+                {/* MODAL GASTO */}
+                {mostrarGasto && (
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm">
+                            <h2 className="text-xl font-black mb-4">Registrar Gasto</h2>
+                            <form onSubmit={registrarGasto} className="space-y-4">
+                                <input required type="text" placeholder="Concepto..." className="w-full border-2 border-slate-100 p-3 rounded-xl outline-none focus:border-blue-500" value={gasto.descripcion} onChange={(e) => setGasto({ ...gasto, descripcion: e.target.value })} />
+                                <input required type="number" step="0.1" placeholder="Monto S/..." className="w-full border-2 border-slate-100 p-3 rounded-xl font-mono focus:border-blue-500" value={gasto.monto} onChange={(e) => setGasto({ ...gasto, monto: e.target.value })} />
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setMostrarGasto(false)} className="flex-1 bg-slate-100 p-3 rounded-xl font-bold">Cerrar</button>
+                                    <button type="submit" className="flex-1 bg-orange-500 text-white p-3 rounded-xl font-bold">Guardar</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* MODAL AUDITORIA — solo admin */}
-            {mostrarHistorial && esAdmin && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
-
-                        <div className="p-6 bg-slate-800 text-white flex justify-between items-center">
-                            <div>
-                                <h2 className="text-xl font-black">Auditoria de Cajas</h2>
-                                <p className="text-xs text-slate-400 mt-1">Historial completo de cierres</p>
+                {/* MODAL AUDITORÍA */}
+                {mostrarHistorial && esAdmin && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
+                            <div className="p-6 bg-slate-800 text-white flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-xl font-black">Auditoria de Cajas</h2>
+                                    <p className="text-xs text-slate-400 mt-1">Historial completo de cierres</p>
+                                </div>
+                                <button onClick={() => setMostrarHistorial(false)} className="text-2xl hover:text-red-400 transition-colors">✕</button>
                             </div>
-                            <button onClick={() => setMostrarHistorial(false)} className="text-2xl hover:text-red-400 transition-colors">✕</button>
-                        </div>
 
-                        <div className="p-4 border-b bg-slate-50 flex gap-3 items-center">
-                            <label className="text-sm font-bold text-slate-600">Filtrar por fecha:</label>
-                            <input
-                                type="date"
-                                value={filtroFecha}
-                                onChange={(e) => { setFiltroFecha(e.target.value); setPaginaActual(1); }}
-                                className="border-2 border-slate-200 p-2 rounded-xl text-sm focus:border-blue-500 outline-none"
-                            />
-                            {filtroFecha && (
-                                <button onClick={() => { setFiltroFecha(''); setPaginaActual(1); }} className="text-xs text-blue-600 font-bold hover:underline">
-                                    Limpiar
-                                </button>
-                            )}
-                            <div className="ml-auto text-sm text-slate-500 font-medium">
-                                Total: <span className="font-black text-slate-800">{historialFiltrado.length}</span> |
-                                Pag. <span className="font-black text-blue-600">{paginaActual}</span> de {totalPaginas || 1}
+                            <div className="p-4 border-b bg-slate-50 flex gap-3 items-center">
+                                <label className="text-sm font-bold text-slate-600">Filtrar por fecha:</label>
+                                <input
+                                    type="date"
+                                    value={filtroFecha}
+                                    onChange={(e) => { setFiltroFecha(e.target.value); setPaginaActual(1); }}
+                                    className="border-2 border-slate-200 p-2 rounded-xl text-sm focus:border-blue-500 outline-none"
+                                />
+                                {filtroFecha && (
+                                    <button onClick={() => { setFiltroFecha(''); setPaginaActual(1); }} className="text-xs text-blue-600 font-bold hover:underline">
+                                        Limpiar
+                                    </button>
+                                )}
+                                <div className="ml-auto text-sm text-slate-500 font-medium">
+                                    Total: <span className="font-black text-slate-800">{historialFiltrado.length}</span> |
+                                    Pag. <span className="font-black text-blue-600">{paginaActual}</span> de {totalPaginas || 1}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="flex-1 overflow-auto p-4">
-                            {cargandoHistorial ? (
-                                <div className="p-10 text-center text-slate-400 animate-pulse font-bold">Cargando historial...</div>
-                            ) : (
-                                <div className="overflow-x-auto border rounded-2xl">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-black tracking-wider">
-                                            <tr>
-                                                <th className="p-3 text-left">#</th>
-                                                <th className="p-3 text-left">Cajero</th>
-                                                <th className="p-3 text-left">Apertura</th>
-                                                <th className="p-3 text-left">Cierre</th>
-                                                <th className="p-3 text-right">Fondo</th>
-                                                <th className="p-3 text-right">Ventas</th>
-                                                <th className="p-3 text-right">Gastos</th>
-                                                <th className="p-3 text-right">Esperado</th>
-                                                <th className="p-3 text-right">Real</th>
-                                                <th className="p-3 text-center">Estado</th>
-                                                <th className="p-3 text-center">PDF</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {itemsPaginados.length === 0 ? (
+                            <div className="flex-1 overflow-auto p-4">
+                                {cargandoHistorial ? (
+                                    <div className="p-10 text-center text-slate-400 animate-pulse font-bold">Cargando historial...</div>
+                                ) : (
+                                    <div className="overflow-x-auto border rounded-2xl">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-black tracking-wider">
                                                 <tr>
-                                                    <td colSpan="11" className="p-8 text-center text-slate-400 italic font-bold">
-                                                        No hay cajas cerradas {filtroFecha && 'para esa fecha'}.
-                                                    </td>
+                                                    <th className="p-3 text-left">#</th>
+                                                    <th className="p-3 text-left">Cajero</th>
+                                                    <th className="p-3 text-left">Apertura</th>
+                                                    <th className="p-3 text-left">Cierre</th>
+                                                    <th className="p-3 text-right">Fondo</th>
+                                                    <th className="p-3 text-right">Ventas</th>
+                                                    <th className="p-3 text-right">Gastos</th>
+                                                    <th className="p-3 text-right">Esperado</th>
+                                                    <th className="p-3 text-right">Real</th>
+                                                    <th className="p-3 text-center">Estado</th>
+                                                    <th className="p-3 text-center">PDF</th>
                                                 </tr>
-                                            ) : (
-                                                itemsPaginados.map((c, idx) => {
-                                                    const { esperado, real, colorClase, texto } = calcularEstadoCaja(c);
-                                                    const ingresos = Number(c.ingresos_totales || 0);
-                                                    const gastos = Number(c.salidas_gastos || 0);
-                                                    const inicial = Number(c.monto_inicial || 0);
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {itemsPaginados.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="11" className="p-8 text-center text-slate-400 italic font-bold">
+                                                            No hay cajas cerradas {filtroFecha && 'para esa fecha'}.
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    itemsPaginados.map((c, idx) => {
+                                                        const { esperado, real, colorClase, texto } = calcularEstadoCaja(c);
+                                                        const ingresos = Number(c.ingresos_totales || 0);
+                                                        const gastos = Number(c.salidas_gastos || 0);
+                                                        const inicial = Number(c.monto_inicial || 0);
 
-                                                    return (
-                                                        <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                                                            <td className="p-3 text-slate-400 font-mono text-xs">{indiceInicio + idx + 1}</td>
-                                                            <td className="p-3 font-bold text-slate-800">{c.usuario?.nombre || '---'}</td>
-                                                            <td className="p-3 text-xs text-slate-600">
-                                                                {c.fecha_apertura ? new Date(c.fecha_apertura).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '---'}
-                                                            </td>
-                                                            <td className="p-3 text-xs text-slate-600">
-                                                                {c.fecha_cierre ? new Date(c.fecha_cierre).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '---'}
-                                                            </td>
-                                                            <td className="p-3 text-right font-mono text-slate-600">S/ {inicial.toFixed(2)}</td>
-                                                            <td className="p-3 text-right font-mono font-bold text-emerald-600">S/ {ingresos.toFixed(2)}</td>
-                                                            <td className="p-3 text-right font-mono text-red-500">S/ {gastos.toFixed(2)}</td>
-                                                            <td className="p-3 text-right font-mono font-bold text-blue-600">S/ {esperado.toFixed(2)}</td>
-                                                            <td className="p-3 text-right font-mono font-bold text-slate-800">S/ {real.toFixed(2)}</td>
-                                                            <td className="p-3 text-center">
-                                                                <span className={`inline-block px-2 py-1 rounded-lg text-[10px] font-black ${colorClase}`}>
-                                                                    {texto}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3 text-center">
-                                                                <button
-                                                                    onClick={() => descargarPDFHistorial(c)}
-                                                                    disabled={!c.fecha_cierre}
-                                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
-                                                                >
-                                                                    PDF
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )}
-                                        </tbody>
-                                    </table>
+                                                        return (
+                                                            <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                                                                <td className="p-3 text-slate-400 font-mono text-xs">{indiceInicio + idx + 1}</td>
+                                                                <td className="p-3 font-bold text-slate-800">{c.usuario?.nombre || '---'}</td>
+                                                                <td className="p-3 text-xs text-slate-600">
+                                                                    {c.fecha_apertura ? new Date(c.fecha_apertura).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '---'}
+                                                                </td>
+                                                                <td className="p-3 text-xs text-slate-600">
+                                                                    {c.fecha_cierre ? new Date(c.fecha_cierre).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '---'}
+                                                                </td>
+                                                                <td className="p-3 text-right font-mono text-slate-600">S/ {inicial.toFixed(2)}</td>
+                                                                <td className="p-3 text-right font-mono font-bold text-emerald-600">S/ {ingresos.toFixed(2)}</td>
+                                                                <td className="p-3 text-right font-mono text-red-500">S/ {gastos.toFixed(2)}</td>
+                                                                <td className="p-3 text-right font-mono font-bold text-blue-600">S/ {esperado.toFixed(2)}</td>
+                                                                <td className="p-3 text-right font-mono font-bold text-slate-800">S/ {real.toFixed(2)}</td>
+                                                                <td className="p-3 text-center">
+                                                                    <span className={`inline-block px-2 py-1 rounded-lg text-[10px] font-black ${colorClase}`}>
+                                                                        {texto}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3 text-center">
+                                                                    <button
+                                                                        onClick={() => descargarPDFHistorial(c)}
+                                                                        disabled={!c.fecha_cierre}
+                                                                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                                                    >
+                                                                        PDF
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {totalPaginas > 1 && (
+                                <div className="flex justify-between items-center p-4 bg-slate-50 border-t">
+                                    <button onClick={() => setPaginaActual(p => Math.max(1, p - 1))} disabled={paginaActual === 1} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-100">
+                                        Anterior
+                                    </button>
+                                    <span className="text-sm font-bold text-slate-500">
+                                        Pagina <span className="text-blue-600">{paginaActual}</span> de {totalPaginas}
+                                    </span>
+                                    <button onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} disabled={paginaActual >= totalPaginas} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-100">
+                                        Siguiente
+                                    </button>
                                 </div>
                             )}
-                        </div>
 
-                        {totalPaginas > 1 && (
-                            <div className="flex justify-between items-center p-4 bg-slate-50 border-t">
-                                <button onClick={() => setPaginaActual(p => Math.max(1, p - 1))} disabled={paginaActual === 1} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-100">
-                                    Anterior
-                                </button>
-                                <span className="text-sm font-bold text-slate-500">
-                                    Pagina <span className="text-blue-600">{paginaActual}</span> de {totalPaginas}
-                                </span>
-                                <button onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} disabled={paginaActual >= totalPaginas} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-100">
-                                    Siguiente
-                                </button>
+                            <div className="p-4 bg-slate-50 border-t text-xs text-slate-500 flex justify-between">
+                                <span><span className="font-bold">Tip:</span> Esperado = Fondo Inicial + Efectivo - Gastos</span>
+                                <span className="font-bold">{historialFiltrado.length} caja(s) encontradas</span>
                             </div>
-                        )}
-
-                        <div className="p-4 bg-slate-50 border-t text-xs text-slate-500 flex justify-between">
-                            <span><span className="font-bold">Tip:</span> Esperado = Fondo Inicial + Efectivo - Gastos</span>
-                            <span className="font-bold">{historialFiltrado.length} caja(s) encontradas</span>
                         </div>
                     </div>
-                </div>
-            )}
-
-        </div>
+                )}
+            </div>
+        </>
     );
 }

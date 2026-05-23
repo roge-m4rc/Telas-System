@@ -62,13 +62,11 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         }
     };
 
-    // PDF DEL CIERRE DE TURNO
     const generarPDFCierre = (r) => {
         const doc = new jsPDF();
         const pageWidth = 210;
         let y = 15;
 
-        // Header
         doc.setFillColor(30, 41, 59);
         doc.rect(0, 0, pageWidth, 30, 'F');
         doc.setTextColor(255, 255, 255);
@@ -82,7 +80,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
 
         y = 38;
 
-        // Info General
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -113,7 +110,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         doc.line(15, y, pageWidth - 15, y);
         y += 8;
 
-        // EFECTIVO EN CAJA
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -172,7 +168,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         doc.line(15, y, pageWidth - 15, y);
         y += 8;
 
-        // VENTAS DIGITALES
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -196,7 +191,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         doc.line(15, y, pageWidth - 15, y);
         y += 8;
 
-        // RESUMEN DEL DIA
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
@@ -215,7 +209,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         
         linea('TOTAL VENDIDO:', `S/ ${(r.totalVendido || 0).toFixed(2)}`, true, [30, 41, 59]);
 
-        // Footer
         doc.setFontSize(7);
         doc.setTextColor(150);
         doc.setFont('helvetica', 'normal');
@@ -257,11 +250,18 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         }
     };
 
+    // ✅ MODIFICADO: Mostrar TODOS los productos (incluyendo agotados)
     const productosFiltrados = productos.filter(p => 
-        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) && p.stock > 0
+        p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     );
 
+    // ✅ MODIFICADO: Validación extra para productos agotados
     const agregarRapido = (producto) => {
+        if (producto.stock <= 0) {
+            toast.error(`⚠️ ${producto.nombre} está agotado`);
+            return;
+        }
+        
         const cantStr = window.prompt(`Cuantos metros de ${producto.nombre}? (Stock: ${producto.stock}m)`, "1");
         if (!cantStr) return; 
         const cantFloat = parseFloat(cantStr);
@@ -415,18 +415,54 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                         className="w-full p-4 text-lg border-2 border-blue-100 bg-blue-50/30 rounded-xl focus:border-blue-500 outline-none transition-all" autoFocus
                     />
                 </div>
+                
+                {/* ✅ GRID DE PRODUCTOS MODIFICADO - CON PRODUCTOS AGOTADOS */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto pb-4 pr-2">
-                    {productosFiltrados.map(p => (
-                        <button key={p.id} onClick={() => agregarRapido(p)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all text-left flex flex-col justify-between h-32 active:scale-95">
-                            <div>
-                                <h3 className="font-bold text-slate-800 line-clamp-2 leading-tight">{p.nombre}</h3>
-                                <p className="text-[10px] text-slate-400 uppercase mt-1">Stock: {p.stock}m</p>
-                            </div>
-                            <div className="text-lg font-black text-blue-600 mt-2">
-                                {config?.simbolo || 'S/'} {p.precio.toFixed(2)}
-                            </div>
-                        </button>
-                    ))}
+                    {productosFiltrados.length === 0 && busqueda && (
+                        <div className="col-span-full text-center py-10 text-slate-400 font-bold">
+                            No se encontraron productos
+                        </div>
+                    )}
+                    
+                    {productosFiltrados.map(p => {
+                        const agotado = p.stock <= 0;
+                        
+                        return (
+                            <button 
+                                key={p.id} 
+                                onClick={() => !agotado && agregarRapido(p)} 
+                                disabled={agotado}
+                                className={`p-4 rounded-xl shadow-sm border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden
+                                    ${agotado 
+                                        ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' 
+                                        : 'bg-white border-slate-200 hover:border-blue-500 hover:shadow-md active:scale-95 cursor-pointer'
+                                    }
+                                `}
+                            >
+                                {/* Badge de AGOTADO */}
+                                {agotado && (
+                                    <div className="absolute top-2 right-2">
+                                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-wider shadow-sm">
+                                            Agotado
+                                        </span>
+                                    </div>
+                                )}
+                                
+                                <div className="flex-1">
+                                    <h3 className={`font-bold line-clamp-2 leading-tight text-sm ${agotado ? 'text-slate-500' : 'text-slate-800'}`}>
+                                        {p.nombre}
+                                    </h3>
+                                    <p className={`text-[10px] uppercase mt-1 font-bold ${agotado ? 'text-red-400' : 'text-slate-400'}`}>
+                                        Stock: {p.stock} mts
+                                    </p>
+                                </div>
+                                
+                                <div className={`text-lg font-black mt-2 ${agotado ? 'text-slate-400 line-through' : 'text-blue-600'}`}>
+                                    {config?.simbolo || 'S/'} {p.precio.toFixed(2)}
+                                </div>
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 

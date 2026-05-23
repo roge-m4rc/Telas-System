@@ -12,6 +12,7 @@ router.get('/reporte/detallado', verificarToken, ventaController.obtenerReporteD
 router.get('/resumen/hoy', verificarToken, ventaController.obtenerResumenHoy); 
 router.post('/', verificarToken, ventaController.registrarVenta); 
 router.get('/', verificarToken, ventaController.obtenerVentas);
+// En routes/ventas.js
 router.put('/:id/anular', verificarToken, ventaController.anularVenta);
 
 // --- 3. RUTAS DE CAJA Y GASTOS ---

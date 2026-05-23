@@ -1,22 +1,20 @@
-const { PrismaClient } = require('@prisma/client');
+import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-// 🛠️ FIX: Helper para obtener inicio/fin del día en Perú en UTC
+// Helper para obtener inicio/fin del día en Perú en UTC
 const obtenerRangoDiaPeru = () => {
     const ahora = new Date();
     const fechaPeru = ahora.toLocaleString("en-US", { timeZone: "America/Lima" });
     const [datePart] = fechaPeru.split(', ');
     const [month, day, year] = datePart.split('/');
     
-    // Inicio del día en Perú = 00:00:00 Lima = 05:00:00 UTC
     const inicio = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 5, 0, 0));
-    // Fin del día en Perú = 23:59:59 Lima = 04:59:59 UTC del día siguiente
     const fin = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 5 + 23, 59, 59));
     
     return { inicio, fin };
 };
 
-const registrarVenta = async (req, res) => {
+export const registrarVenta = async (req, res) => {
     console.log("🚨 DATOS QUE LLEGAN DEL FRONTEND:", req.body);
     const { cliente_id, productos, metodo_pago } = req.body; 
     const usuario_id = req.usuario ? req.usuario.id : 1; 
@@ -94,20 +92,40 @@ const registrarVenta = async (req, res) => {
     }
 };
 
-const obtenerVentas = async (req, res) => {
+export const obtenerVentas = async (req, res) => {
+    const { fechaInicio, fechaFin } = req.query;
+    
     try {
+        let whereClause = {};
+        
+        if (fechaInicio && fechaFin) {
+            const inicio = new Date(`${fechaInicio}T00:00:00-05:00`);
+            const fin = new Date(`${fechaFin}T23:59:59-05:00`);
+            whereClause = { fecha: { gte: inicio, lte: fin } };
+        }
+        
         const ventas = await prisma.venta.findMany({
-            include: { cliente: true, usuario: true },
+            where: whereClause,
+            include: { 
+                cliente: true, 
+                usuario: true,
+                detalles: {
+                    include: {
+                        producto: true
+                    }
+                }
+            },
             orderBy: { fecha: 'desc' }
         });
+        
         res.json(ventas);
     } catch (error) {
+        console.error("Error en obtenerVentas:", error);
         res.status(500).json({ error: 'Error al obtener historial de ventas' });
     }
 };
 
-// 🛠️ FIX: Usar rango de Perú en UTC
-const obtenerResumenHoy = async (req, res) => {
+export const obtenerResumenHoy = async (req, res) => {
     try {
         const { inicio, fin } = obtenerRangoDiaPeru();
 
@@ -129,8 +147,13 @@ const obtenerResumenHoy = async (req, res) => {
     }
 };
 
-const anularVenta = async (req, res) => {
+export const anularVenta = async (req, res) => {
     const { id } = req.params;
+    const { motivo } = req.body;
+
+    if (!motivo || motivo.trim() === "") {
+        return res.status(400).json({ error: "Es obligatorio ingresar un motivo para anular la venta." });
+    }
 
     try {
         const resultado = await prisma.$transaction(async (tx) => {
@@ -145,7 +168,10 @@ const anularVenta = async (req, res) => {
 
             const ventaAnulada = await tx.venta.update({
                 where: { id: parseInt(id) },
-                data: { estado: 'ANULADA' }
+                data: { 
+                    estado: 'ANULADA',
+                    motivo_anulacion: motivo.trim()
+                }
             });
 
             for (const item of venta.detalles) {
@@ -158,22 +184,23 @@ const anularVenta = async (req, res) => {
                     data: {
                         tipo: 'ENTRADA',
                         cantidad: item.cantidad,
-                        motivo: `Devolución por Anulación de Boleta #${venta.id}`,
+                        motivo: `Devolución por Anulación de Boleta #${venta.id} - Motivo: ${motivo}`,
                         producto_id: item.producto_id
                     }
                 });
             }
+            
             return ventaAnulada;
         });
 
-        res.json({ mensaje: '🚫 Venta anulada y stock devuelto con éxito', venta: resultado });
+        res.json({ message: "✅ Venta anulada con éxito y stock restaurado.", venta: resultado });
     } catch (error) {
         console.error("Error al anular:", error);
         res.status(400).json({ error: error.message });
     }
 };
 
-const obtenerReporteDetallado = async (req, res) => {
+export const obtenerReporteDetallado = async (req, res) => {
     const { inicio, fin } = req.query;
 
     try {
@@ -212,5 +239,3 @@ const obtenerReporteDetallado = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
-
-module.exports = { registrarVenta, obtenerVentas, obtenerResumenHoy, anularVenta, obtenerReporteDetallado };

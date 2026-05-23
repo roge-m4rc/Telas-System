@@ -144,22 +144,43 @@ export const obtenerLogs = async () => {
 
 // --- GESTIÓN DE ATRIBUTOS ---
 export const obtenerCategorias = async () => {
-    const res = await api.get('/opciones/categorias');
+    const res = await api.get('/atributos/categorias');
     return res.data;
 };
 
 export const crearCategoria = async (nombre) => {
-    const res = await api.post('/opciones/categorias', { nombre });
+    const res = await api.post('/atributos/categorias', { nombre });
     return res.data;
 };
 
+export const actualizarCategoria = async (id, nombre) => {
+    const res = await api.put(`/atributos/categorias/${id}`, { nombre });
+    return res.data;
+};
+
+export const eliminarCategoria = async (id) => {
+    const res = await api.delete(`/atributos/categorias/${id}`);
+    return res.data;
+};
+
+// ==================== COLORES ====================
 export const obtenerColores = async () => {
-    const res = await api.get('/opciones/colores');
+    const res = await api.get('/atributos/colores');
     return res.data;
 };
 
 export const crearColor = async (nombre) => {
-    const res = await api.post('/opciones/colores', { nombre });
+    const res = await api.post('/atributos/colores', { nombre });
+    return res.data;
+};
+
+export const actualizarColor = async (id, nombre) => {
+    const res = await api.put(`/atributos/colores/${id}`, { nombre });
+    return res.data;
+};
+
+export const eliminarColor = async (id) => {
+    const res = await api.delete(`/atributos/colores/${id}`);
     return res.data;
 };
 

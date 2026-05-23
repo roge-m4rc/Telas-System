@@ -86,6 +86,7 @@ model Venta {
   fecha      DateTime @default(now())
   estado     String         @default("ACTIVA") // Puede ser "ACTIVA" o "ANULADA"
   usuario_id Int
+  motivo_anulacion String?
   metodo_pago String   @default("EFECTIVO") // "EFECTIVO", "YAPE", "VISA"
   cliente_id Int?
 

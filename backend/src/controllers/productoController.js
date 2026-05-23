@@ -5,9 +5,10 @@ const prisma = new PrismaClient();
 const obtenerProductos = async (req, res) => {
     try {
         const productos = await prisma.producto.findMany({
-            where: { activo: true },
+            where: { 
+                activo: true   // 👈 FILTRO CLAVE: solo productos activos
+            },
             orderBy: { nombre: 'asc' },
-            // ✨ AQUÍ ESTÁ LA MAGIA: Le decimos a Prisma que incluya los datos de las tablas relacionadas
             include: {
                 categoria: true,
                 color: true
@@ -15,7 +16,43 @@ const obtenerProductos = async (req, res) => {
         });
         res.json(productos);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error al obtener productos' });
+    }
+};
+// OBTENER PRODUCTOS INACTIVOS (dados de baja)
+const obtenerProductosInactivos = async (req, res) => {
+    try {
+        const productos = await prisma.producto.findMany({
+            where: { 
+                activo: false
+            },
+            orderBy: { nombre: 'asc' },
+            include: {
+                categoria: true,
+                color: true
+            }
+        });
+        res.json(productos);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener productos inactivos' });
+    }
+};
+
+// REACTIVAR PRODUCTO (volver a poner activo: true)
+const reactivarProducto = async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+        const producto = await prisma.producto.update({
+            where: { id: parseInt(id) },
+            data: { activo: true }
+        });
+        res.json({ message: "Producto reactivado correctamente", producto });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al reactivar producto" });
     }
 };
 
@@ -70,14 +107,50 @@ const actualizarProducto = async (req, res) => {
 // 4. ELIMINACIÓN LÓGICA
 const eliminarProducto = async (req, res) => {
     const { id } = req.params;
+
     try {
-        await prisma.producto.update({
-            where: { id: parseInt(id) },
-            data: { activo: false }
+        // 1. Verificar si el producto tiene movimientos en el Kardex
+        const cantidadMovimientos = await prisma.movimiento.count({
+            where: { producto_id: parseInt(id) }
         });
-        res.json({ mensaje: 'Producto eliminado' });
+
+        // 2. Verificar si el producto tiene ventas registradas (detalles)
+        const cantidadVentas = await prisma.detalleVenta.count({
+            where: { producto_id: parseInt(id) }
+        });
+
+        // 3. Decisión: si tiene historial, solo dar de baja; si no, eliminar físicamente
+        if (cantidadMovimientos > 0 || cantidadVentas > 0) {
+            // 🔄 BAJA LÓGICA: Conservar historial
+            const productoActualizado = await prisma.producto.update({
+                where: { id: parseInt(id) },
+                data: { activo: false }
+            });
+            
+            console.log(`📦 Producto #${id} dado de baja (tenía ${cantidadMovimientos} movimientos y ${cantidadVentas} ventas)`);
+            
+            return res.json({ 
+                message: "Producto dado de baja. Se conservó su historial en el sistema.",
+                producto: productoActualizado,
+                bajaLogica: true
+            });
+        } else {
+            // 🗑️ ELIMINACIÓN FÍSICA: Producto nuevo sin historial
+            const productoEliminado = await prisma.producto.delete({
+                where: { id: parseInt(id) }
+            });
+            
+            console.log(`🗑️ Producto #${id} eliminado físicamente (no tenía historial)`);
+            
+            return res.json({ 
+                message: "Producto eliminado por completo del inventario.",
+                producto: productoEliminado,
+                bajaLogica: false
+            });
+        }
     } catch (error) {
-        res.status(500).json({ error: 'Error al eliminar producto' });
+        console.error("Error al eliminar producto:", error);
+        res.status(500).json({ error: "Error al procesar la eliminación del producto" });
     }
 };
 
@@ -144,8 +217,51 @@ const obtenerResumenDashboard = async (req, res) => {
     }
 };
 
+const obtenerMovimientosConFiltros = async (req, res) => {
+    const { fechaInicio, fechaFin, tipo, busqueda } = req.query;
+    
+    try {
+        // Construir el filtro dinámicamente
+        let whereClause = {};
+        
+        // Filtro por fechas
+        if (fechaInicio && fechaFin) {
+            const inicio = new Date(`${fechaInicio}T00:00:00-05:00`);
+            const fin = new Date(`${fechaFin}T23:59:59-05:00`);
+            whereClause.fecha = { gte: inicio, lte: fin };
+        }
+        
+        // Filtro por tipo
+        if (tipo && tipo !== 'TODOS') {
+            whereClause.tipo = tipo;
+        }
+        
+        // Filtro por búsqueda (producto o motivo)
+        if (busqueda) {
+            whereClause.OR = [
+                { motivo: { contains: busqueda, mode: 'insensitive' } },
+                { producto: { nombre: { contains: busqueda, mode: 'insensitive' } } }
+            ];
+        }
+        
+        const movimientos = await prisma.movimiento.findMany({
+            where: whereClause,
+            include: { producto: { include: { categoria: true } } },
+            orderBy: { fecha: 'desc' }
+        });
+        
+        console.log(`📊 Movimientos consultados: ${movimientos.length} registros`);
+        res.json(movimientos);
+    } catch (error) {
+        console.error("Error en obtenerMovimientosConFiltros:", error);
+        res.status(500).json({ error: 'Error al obtener movimientos' });
+    }
+};
 module.exports = {
     obtenerProductos,
+    obtenerProductosInactivos,      // 
+    reactivarProducto,              // 
+    obtenerMovimientosConFiltros,   // 
     crearProducto,
     actualizarProducto,
     eliminarProducto,
