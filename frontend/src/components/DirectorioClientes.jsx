@@ -122,7 +122,7 @@ export default function DirectorioClientes() {
                 <td className="py-3 px-4 font-semibold text-gray-800">{cliente.nombre}</td>
                 <td className="py-3 px-4 text-gray-600">{cliente.documento || '-'}</td>
                 <td className="py-3 px-4 text-sm">
-                  <div className="text-gray-700">📞 {cliente.telefono || '-'}</div>
+                  <div className="text-gray-700" placeholder="Opcional">📞 {cliente.telefono || '-'}</div>
                   <div className="text-gray-500">✉️ {cliente.email || '-'}</div>
                 </td>
                 <td className="py-3 px-4 text-center">

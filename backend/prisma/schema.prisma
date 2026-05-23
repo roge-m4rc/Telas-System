@@ -68,6 +68,8 @@ model Producto {
   categoria_id Int
   color_id     Int
   precio       Float
+  precio_compra Float  @default(0.00)
+  alerta_stock Decimal?
   stock        Int            @default(0)
   categoria    Categoria      @relation(fields: [categoria_id], references: [id])
   color        Color          @relation(fields: [color_id], references: [id])

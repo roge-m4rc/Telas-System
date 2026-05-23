@@ -7,8 +7,22 @@ export default function FormularioProducto({ onProductoCreado, productoEdicion, 
   const [colores, setColores] = useState([]);
   
   const [formulario, setFormulario] = useState({
-    nombre: '', precio: '', stock: '', categoria_id: '', color_id: ''      
+    nombre: '', precio: '', precio_compra: '', stock: '', categoria_id: '', color_id: ''      
   });
+
+  // Función para calcular el margen de ganancia
+  const calcularMargen = () => {
+    const precioVenta = parseFloat(formulario.precio);
+    const precioCompra = parseFloat(formulario.precio_compra);
+    
+    if (!precioVenta || precioVenta <= 0 || !precioCompra || precioCompra <= 0) {
+      return 0;
+    }
+    
+    const ganancia = precioVenta - precioCompra;
+    const porcentaje = (ganancia / precioVenta) * 100;
+    return porcentaje.toFixed(1);
+  };
 
   const cargarOpciones = async () => {
     setCategorias(await obtenerCategorias());
@@ -20,14 +34,15 @@ export default function FormularioProducto({ onProductoCreado, productoEdicion, 
   useEffect(() => {
     if (productoEdicion) {
       setFormulario({
-        nombre: productoEdicion.nombre,
-        precio: productoEdicion.precio,
-        stock: productoEdicion.stock,
+        nombre: productoEdicion.nombre || '',
+        precio: productoEdicion.precio || '',
+        precio_compra: productoEdicion.precio_compra || '',
+        stock: productoEdicion.stock || '',
         categoria_id: productoEdicion.categoria_id || '',
         color_id: productoEdicion.color_id || ''
       });
     } else {
-      setFormulario({ nombre: '', precio: '', stock: '', categoria_id: '', color_id: '' });
+      setFormulario({ nombre: '', precio: '', precio_compra: '', stock: '', categoria_id: '', color_id: '' });
     }
   }, [productoEdicion]);
 
@@ -40,9 +55,9 @@ export default function FormularioProducto({ onProductoCreado, productoEdicion, 
     const nueva = window.prompt("🏷️ Ingresa el nombre de la NUEVA CATEGORÍA:");
     if (!nueva || nueva.trim() === '') return;
     try {
-        const res = await api.post('/categorias', { nombre: nueva.trim() });
-        await cargarOpciones(); // Recargamos la lista
-        setFormulario(prev => ({ ...prev, categoria_id: res.data.id })); // La autoseleccionamos
+        const res = await api.post('/opciones/categorias', { nombre: nueva.trim() });
+        await cargarOpciones();
+        setFormulario(prev => ({ ...prev, categoria_id: res.data.id }));
         toast.success("Categoría creada al instante.");
     } catch (error) { toast.error("Error al crear categoría."); }
   };
@@ -51,7 +66,7 @@ export default function FormularioProducto({ onProductoCreado, productoEdicion, 
     const nuevo = window.prompt("🎨 Ingresa el nombre del NUEVO COLOR:");
     if (!nuevo || nuevo.trim() === '') return;
     try {
-        const res = await api.post('/colores', { nombre: nuevo.trim() });
+        const res = await api.post('/opciones/colores', { nombre: nuevo.trim() });
         await cargarOpciones();
         setFormulario(prev => ({ ...prev, color_id: res.data.id }));
         toast.success("Color creado al instante.");
@@ -77,8 +92,9 @@ export default function FormularioProducto({ onProductoCreado, productoEdicion, 
     }
 
     const datosAEnviar = {
-      ...formulario,
+      nombre: formulario.nombre,
       precio: parseFloat(formulario.precio),
+      precio_compra: parseFloat(formulario.precio_compra) || 0,
       stock: parseInt(formulario.stock),
       categoria_id: parseInt(formulario.categoria_id),
       color_id: parseInt(formulario.color_id)
@@ -93,15 +109,18 @@ export default function FormularioProducto({ onProductoCreado, productoEdicion, 
         toast.success("✅ Tela registrada");
       }
       onProductoCreado(); 
-      onClose(); // Cerramos el modal flotante al terminar
+      onClose();
     } catch (error) {
+        console.error(error);
         toast.error("Hubo un error al guardar la tela.");
     }
   };
 
+  const margen = calcularMargen();
+  const margenColor = margen >= 30 ? 'text-green-600' : margen >= 20 ? 'text-emerald-500' : margen >= 10 ? 'text-amber-500' : 'text-red-500';
+
   return (
     <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-2xl relative border-t-8 border-t-blue-600 animate-fadeIn">
-      {/* BOTÓN CERRAR (X) */}
       <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-all">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -145,14 +164,69 @@ export default function FormularioProducto({ onProductoCreado, productoEdicion, 
           </select>
         </div>
 
+        {/* PRECIO DE COMPRA */}
         <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Precio por Metro (S/)</label>
-          <input type="number" step="0.10" name="precio" required value={formulario.precio} onChange={manejarCambio} className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" />
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Precio de Compra (S/)</label>
+          <input 
+            type="number" 
+            step="0.10" 
+            name="precio_compra" 
+            required 
+            value={formulario.precio_compra} 
+            onChange={manejarCambio} 
+            className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" 
+            placeholder="Costo de adquisición"
+          />
         </div>
 
+        {/* PRECIO DE VENTA */}
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Precio de Venta (S/)</label>
+          <input 
+            type="number" 
+            step="0.10" 
+            name="precio" 
+            required 
+            value={formulario.precio} 
+            onChange={manejarCambio} 
+            className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" 
+            placeholder="Precio al público"
+          />
+        </div>
+
+        {/* STOCK */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Stock (Mts)</label>
-          <input type="number" step="0.1" name="stock" required value={formulario.stock} onChange={manejarCambio} className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" />
+          <input 
+            type="number" 
+            step="0.1" 
+            name="stock" 
+            required 
+            value={formulario.stock} 
+            onChange={manejarCambio} 
+            className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" 
+          />
+        </div>
+
+        {/* CÁLCULO DEL MARGEN DE GANANCIA */}
+        <div className="md:col-span-2 mt-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-bold text-slate-600">📊 Margen de Ganancia:</span>
+            <span className={`text-2xl font-black ${margenColor}`}>
+              {margen}%
+            </span>
+          </div>
+          <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
+            <div 
+              className={`h-2 rounded-full transition-all duration-300 ${
+                margen >= 30 ? 'bg-green-600' : margen >= 20 ? 'bg-emerald-500' : margen >= 10 ? 'bg-amber-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${Math.min(margen, 100)}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 text-center">
+            {margen >= 30 ? '✅ Excelente margen' : margen >= 20 ? '👍 Buen margen' : margen >= 10 ? '⚠️ Margen ajustado' : '🔴 Margen bajo - Revisa precios'}
+          </p>
         </div>
 
         <div className="md:col-span-2 flex justify-end mt-4 pt-4 border-t border-slate-100 gap-3">

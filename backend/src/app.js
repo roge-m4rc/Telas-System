@@ -11,7 +11,8 @@ const auditoriaRoutes = require('./routes/auditoriaRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const ventaRoutes = require('./routes/ventaRoutes');
-const atributoRoutes = require('./routes/atributoRoutes'); // 👈 NUEVA
+const atributoRoutes = require('./routes/atributoRoutes');
+const backupRoutes = require('./routes/backupRoutes'); // 👈 NUEVA
 
 const app = express();
 
@@ -34,7 +35,8 @@ app.use('/api/auditoria', auditoriaRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/productos', productoRoutes);
 app.use('/api/ventas', ventaRoutes);
-app.use('/api/atributos', atributoRoutes); // 👈 NUEVA
+app.use('/api/atributos', atributoRoutes);
+app.use('/api/backup', backupRoutes); // 👈 NUEVA
 
 // 5. ENCENDIDO DEL SERVIDOR
 app.listen(PORT, () => {

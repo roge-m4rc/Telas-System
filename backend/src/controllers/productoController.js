@@ -60,14 +60,15 @@ const reactivarProducto = async (req, res) => {
 const crearProducto = async (req, res) => {
     console.log("📦 DATOS RECIBIDOS DEL FORMULARIO:", req.body);
 
-    const { nombre, precio, stock, categoria_id, color_id } = req.body;
+    const { nombre, precio, precio_compra, stock, categoria_id, color_id } = req.body;
     
     try {
         const nuevoProducto = await prisma.producto.create({
             data: { 
                 nombre, 
-                precio: parseFloat(precio), 
-                stock: parseInt(stock, 10),
+                precio: parseFloat(precio),
+                precio_compra: parseFloat(precio_compra) || 0,
+                stock: parseFloat(stock), alerta_stock: parseFloat(alerta_stock) || 15, 
                 categoria_id: parseInt(categoria_id, 10),
                 color_id: color_id ? parseInt(color_id, 10) : null 
             }
@@ -84,8 +85,7 @@ const crearProducto = async (req, res) => {
 // 3. ACTUALIZAR PRODUCTO (Reparado para que guarde categoría y color)
 const actualizarProducto = async (req, res) => {
     const { id } = req.params;
-    // Extraemos TODA la info, no solo nombre, precio y stock
-    const { nombre, precio, stock, categoria_id, color_id } = req.body; 
+    const { nombre, precio, precio_compra, stock, categoria_id, color_id } = req.body; 
     
     try {
         const productoActualizado = await prisma.producto.update({
@@ -93,6 +93,7 @@ const actualizarProducto = async (req, res) => {
             data: {
                 nombre,
                 precio: parseFloat(precio),
+                precio_compra: parseFloat(precio_compra) || 0,
                 stock: parseFloat(stock),
                 categoria_id: categoria_id ? parseInt(categoria_id, 10) : null,
                 color_id: color_id ? parseInt(color_id, 10) : null

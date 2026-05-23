@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { verificarToken, verificarRol } = require('../middlewares/authMiddleware');
 const reporteController = require('../controllers/reporteController');
-const productoController = require('../controllers/productoController'); // 👈 Importa TODO el controlador
+const productoController = require('../controllers/productoController');
+const dashboardController = require('../controllers/dashboardController'); // 👈 Importa TODO el controlador
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -15,6 +16,7 @@ router.patch('/:id/reactivar', verificarToken, verificarRol(['Administrador']), 
 
 // 👇 RUTA CON FILTROS (DEBE IR ANTES de la ruta /movimientos normal)
 router.get('/movimientos/filtrados', verificarToken, productoController.obtenerMovimientosConFiltros);
+router.get('/dashboard/top-productos', verificarToken, dashboardController.obtenerProductosMasVendidos);
 
 // Ruta original de movimientos (sin filtros, se mantiene por compatibilidad)
 router.get('/movimientos', verificarToken, async (req, res) => {

@@ -336,6 +336,39 @@ export default function Dashboard({ productos = [] }) {
                                 Auditoria de Cajas
                             </button>
                         )}
+                        {esAdmin && (
+                            <button 
+                                onClick={async () => {
+                                    try {
+                                        const response = await api.get('/backup/exportar', {
+                                            responseType: 'blob' // Importante para descargar archivos
+                                        });
+                                        
+                                        // Crear link de descarga
+                                        const url = window.URL.createObjectURL(new Blob([response.data]));
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        
+                                        // Extraer nombre del archivo del header Content-Disposition
+                                        const contentDisposition = response.headers['content-disposition'];
+                                        const filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
+                                        link.setAttribute('download', filename);
+                                        
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        link.remove();
+                                        window.URL.revokeObjectURL(url);
+                                        
+                                        toast.success("Backup generado y descargado");
+                                    } catch (error) {
+                                        toast.error("Error al generar backup");
+                                    }
+                                }}
+                                className="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-bold"
+                            >
+                                💾 Backup de Seguridad
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -352,7 +385,7 @@ export default function Dashboard({ productos = [] }) {
                         <h3 className="text-3xl font-black mt-2">S/ {stats.hoy?.total?.toFixed(2) || '0.00'}</h3>
                         <p className="text-[10px] mt-2 bg-white/20 inline-block px-2 py-1 rounded-full">{stats.hoy?.cantidad || 0} operaciones</p>
                     </div>
-
+                    
                     {esAdmin ? (
                         <div className="bg-emerald-600 p-6 rounded-3xl text-white shadow-xl shadow-emerald-100">
                             <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Mes Actual</p>

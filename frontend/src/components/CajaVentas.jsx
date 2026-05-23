@@ -279,16 +279,36 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
             ));
         } else {
             setCarrito([...carrito, {
-                id: producto.id, nombre: producto.nombre, precio_unit: producto.precio,
-                cantidad: cantFloat, subtotal: cantFloat * producto.precio
+                id: producto.id, 
+                nombre: producto.nombre, 
+                precio_unit: producto.precio,     // Precio original (para referencia)
+                precioVenta: producto.precio,     // 👈 Precio editable (para rebajas)
+                cantidad: cantFloat, 
+                subtotal: cantFloat * producto.precio
             }]);
         }
     };
 
     const quitarDelCarrito = (id) => setCarrito(carrito.filter(item => item.id !== id));
-    
+    const cambiarPrecioItem = (id, nuevoPrecio) => {
+        const precio = parseFloat(nuevoPrecio);
+        if (isNaN(precio) || precio < 0) return;
+        
+        setCarrito(prev => 
+            prev.map(item => 
+                    item.id === id 
+                        ? { 
+                            ...item, 
+                            precioVenta: precio,
+                            subtotal: precio * item.cantidad 
+                        } 
+                        : item
+            )
+        );
+    };
+
     const porcIGV = config?.porcentaje_impuesto ?? 0.18;
-    const totalFinal = carrito.reduce((suma, item) => suma + item.subtotal, 0);
+    const totalFinal = carrito.reduce((suma, item) => suma + ((item.precioVenta || item.precio_unit) * item.cantidad), 0);
     const subtotalDesglosado = totalFinal / (1 + porcIGV);
     const igvDesglosado = totalFinal - subtotalDesglosado;
 
@@ -297,8 +317,11 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         const payload = {
             cliente_id: clienteId ? parseInt(clienteId) : null,
             metodo_pago: metodoPago,
-            productos: carrito.map(item => ({ id: item.id, cantidad: item.cantidad, precio_unit: item.precio_unit }))
-        };
+            productos: carrito.map(item => ({ 
+                id: item.id, 
+                cantidad: item.cantidad, 
+                precio_unit: item.precioVenta || item.precio_unit  // 👈 Usa el precio con rebaja
+            }))};
         try {
             const respuesta = await api.post('/ventas', payload); 
             const clienteSeleccionado = clientes.find(c => c.id === parseInt(clienteId));
@@ -496,19 +519,61 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                         ) : (
                             <ul className="space-y-3">
                                 {carrito.map((item, idx) => (
-                                    <li key={idx} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center">
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-slate-800 line-clamp-1">{item.nombre}</p>
-                                            <p className="text-xs text-slate-500">
-                                                {item.cantidad}m x {config?.simbolo || 'S/'} {item.precio_unit.toFixed(2)}
-                                            </p>
+                                    <li key={idx} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <p className="text-sm font-bold text-slate-800 line-clamp-1">{item.nombre}</p>
+                                                <p className="text-xs text-slate-400">Precio lista: {config?.simbolo || 'S/'} {item.precio_unit.toFixed(2)}</p>
+                                            </div>
+                                            <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 hover:text-red-600 font-black px-2">✕</button>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="font-black text-slate-700">
-                                                {config?.simbolo || 'S/'} {item.subtotal.toFixed(2)}
-                                            </span>
-                                            <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 hover:text-red-600 font-black px-2">x</button>
-                                        </div>
+                                        
+                                        <div className="flex items-center justify-between mt-2 gap-4">
+                                            {/* Cantidad */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-slate-400 font-bold">Mts:</span>
+                                                <input 
+                                                    type="number" 
+                                                    step="0.1"
+                                                    value={item.cantidad} 
+                                                    onChange={(e) => {
+                                                        const nuevaCant = parseFloat(e.target.value);
+                                                        if (!isNaN(nuevaCant) && nuevaCant > 0) {
+                                                            setCarrito(prev => prev.map(i => 
+                                                                i.id === item.id 
+                                                                    ? { ...i, cantidad: nuevaCant, subtotal: (i.precioVenta || i.precio_unit) * nuevaCant }
+                                                                    : i
+                                                            ));
+                                                        }
+                                                    }}
+                                                    className="w-16 p-1 border rounded-lg text-center font-bold text-sm"
+                                                />
+                                            </div>
+                                            
+                                            {/* Precio con rebaja */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-amber-500 font-bold">Rebaja:</span>
+                                                <div className="flex items-center border rounded-lg bg-amber-50/50 border-amber-200 px-1">
+                                                    <span className="text-xs font-bold text-amber-600 pl-1">{config?.simbolo || 'S/'}</span>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.10"
+                                                        value={item.precioVenta || item.precio_unit} 
+                                                        onChange={(e) => cambiarPrecioItem(item.id, e.target.value)}
+                                                        className="w-20 p-1 bg-transparent font-black text-sm text-amber-700 text-right focus:outline-none"
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Subtotal */}
+                                            <div className="text-right">
+                                                <span className="text-[10px] text-slate-400 block font-bold">Subtotal</span>
+                                                 <span className="font-black text-slate-700 text-sm">
+                                                        {config?.simbolo || 'S/'} {((item.precioVenta || item.precio_unit) * item.cantidad).toFixed(2)}
+                                                    </span>
+                                                </div>
+                                            </div>
                                     </li>
                                 ))}
                             </ul>
@@ -566,7 +631,7 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                 <input type="text" className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" value={nuevoCliente.documento} onChange={(e) => setNuevoCliente({...nuevoCliente, documento: e.target.value})}/>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Telefono</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1" placeholder="Opcional">Telefono</label>
                                 <input type="text" className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" value={nuevoCliente.telefono} onChange={(e) => setNuevoCliente({...nuevoCliente, telefono: e.target.value})}/>
                             </div>
                             <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
