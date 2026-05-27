@@ -21,7 +21,8 @@ const verificarRol = (rolesPermitidos) => {
         if (!req.usuario) {
             return res.status(401).json({ error: "No autorizado" });
         }
-        if (!rolesPermitidos.includes(req.usuario.rol?.nombre)) {
+        const rolUsuario = req.usuario.rol;
+        if (!rolesPermitidos.includes(rolUsuario)) {
             return res.status(403).json({ error: "No tienes permisos para esta acción" });
         }
         next();
