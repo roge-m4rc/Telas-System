@@ -2,11 +2,14 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 // 1. OBTENER PRODUCTOS ACTIVOS
+// backend/src/controllers/productoController.js
+
+// 1. OBTENER PRODUCTOS ACTIVOS
 const obtenerProductos = async (req, res) => {
     try {
         const productos = await prisma.producto.findMany({
             where: { 
-                activo: true   // 👈 FILTRO CLAVE: solo productos activos
+                activo: true
             },
             orderBy: { nombre: 'asc' },
             include: {
@@ -14,9 +17,16 @@ const obtenerProductos = async (req, res) => {
                 color: true
             }
         });
-        res.json(productos);
+        // Asegurar que los campos numéricos se devuelvan como número
+        const productosFormateados = productos.map(p => ({
+            ...p,
+            precio: Number(p.precio),
+            precio_compra: Number(p.precio_compra),
+            stock: Number(p.stock)
+        }));
+        res.json(productosFormateados);
     } catch (error) {
-        console.error(error);
+        console.error("🚨 Error en obtenerProductos:", error);
         res.status(500).json({ error: 'Error al obtener productos' });
     }
 };
@@ -57,9 +67,11 @@ const reactivarProducto = async (req, res) => {
 };
 
 // 2. CREAR PRODUCTO
+// 2. CREAR PRODUCTO
 const crearProducto = async (req, res) => {
     console.log("📦 DATOS RECIBIDOS DEL FORMULARIO:", req.body);
 
+    // Extraemos SOLO los campos que existen en el formulario
     const { nombre, precio, precio_compra, stock, categoria_id, color_id } = req.body;
     
     try {
@@ -68,9 +80,10 @@ const crearProducto = async (req, res) => {
                 nombre, 
                 precio: parseFloat(precio),
                 precio_compra: parseFloat(precio_compra) || 0,
-                stock: parseFloat(stock), alerta_stock: parseFloat(alerta_stock) || 15, 
+                stock: parseFloat(stock),
                 categoria_id: parseInt(categoria_id, 10),
-                color_id: color_id ? parseInt(color_id, 10) : null 
+                color_id: color_id ? parseInt(color_id, 10) : null,
+                // alerta_stock se usará más adelante, por ahora lo dejamos con valor por defecto
             }
         });
         
@@ -83,6 +96,7 @@ const crearProducto = async (req, res) => {
 };
 
 // 3. ACTUALIZAR PRODUCTO (Reparado para que guarde categoría y color)
+// 3. ACTUALIZAR PRODUCTO
 const actualizarProducto = async (req, res) => {
     const { id } = req.params;
     const { nombre, precio, precio_compra, stock, categoria_id, color_id } = req.body; 
@@ -101,6 +115,7 @@ const actualizarProducto = async (req, res) => {
         });
         res.json({ mensaje: 'Producto actualizado', producto: productoActualizado });
     } catch (error) {
+        console.error("Error en actualizarProducto:", error);
         res.status(500).json({ error: 'Error al actualizar producto' });
     }
 };

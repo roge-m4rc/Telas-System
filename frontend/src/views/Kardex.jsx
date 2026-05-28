@@ -26,22 +26,24 @@ export default function Kardex() {
     const [paginaActual, setPaginaActual] = useState(1);
     const filasPorPagina = 10;
 
+    // Cargar TODOS los movimientos UNA SOLA VEZ desde la ruta VIEJA (que sí funciona)
     useEffect(() => {
-        cargarTodosLosMovimientos();
+        const cargarMovimientos = async () => {
+            try {
+                const res = await api.get('/productos/movimientos');
+                console.log("📦 Movimientos cargados:", res.data.length);
+                setMovimientosTotales(res.data);
+            } catch (error) {
+                console.error(error);
+                toast.error("Error al cargar el kardex: " + (error.response?.data?.error || ""));
+            } finally {
+                setCargando(false);
+            }
+        };
+        cargarMovimientos();
     }, []);
 
-    const cargarTodosLosMovimientos = async () => {
-        try {
-            const res = await api.get('/productos/movimientos/filtrados');
-            console.log(`📦 Movimientos totales cargados: ${res.data.length}`);
-            setMovimientosTotales(res.data);
-        } catch (e) {
-            toast.error("Error al cargar el kardex.");
-        } finally {
-            setCargando(false);
-        }
-    };
-
+    // Filtrar en memoria (rápido y sin depender del backend)
     const movimientosFiltrados = useMemo(() => {
         let resultado = [...movimientosTotales];
         
@@ -84,7 +86,7 @@ export default function Kardex() {
     const totalSalidas = movimientosFiltrados.filter(m => m.tipo === 'SALIDA').reduce((s, m) => s + m.cantidad, 0);
 
     const exportarExcel = () => {
-        if (movimientosFiltrados.length === 0) return toast.warning("No hay datos");
+        if (movimientosFiltrados.length === 0) return toast.warning("No hay datos para exportar.");
         const datos = movimientosFiltrados.map(m => ({
             "Fecha": new Date(m.fecha).toLocaleDateString(),
             "Producto": m.producto?.nombre,
@@ -96,11 +98,11 @@ export default function Kardex() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Kardex");
         XLSX.writeFile(wb, `Kardex_${fechaDesde}_al_${fechaHasta}.xlsx`);
-        toast.success("Excel listo");
+        toast.success("Excel descargado.");
     };
 
     const exportarPDF = () => {
-        if (movimientosFiltrados.length === 0) return toast.warning("No hay datos");
+        if (movimientosFiltrados.length === 0) return toast.warning("No hay datos para exportar.");
         const doc = new jsPDF();
         doc.text(`Kardex: ${fechaDesde} al ${fechaHasta}`, 14, 15);
         doc.text(`Entradas: +${totalEntradas.toFixed(1)}m | Salidas: -${totalSalidas.toFixed(1)}m`, 14, 22);
@@ -115,7 +117,7 @@ export default function Kardex() {
         
         autoTable(doc, { startY: 30, head: [['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Motivo']], body: datos });
         doc.save(`Kardex_${fechaDesde}_al_${fechaHasta}.pdf`);
-        toast.success("PDF listo");
+        toast.success("PDF generado.");
     };
 
     if (cargando) return <div className="p-10 text-center animate-pulse">Cargando kardex...</div>;
@@ -163,30 +165,34 @@ export default function Kardex() {
                         </tr>
                     </thead>
                     <tbody>
-                        {itemsActuales.map(m => (
-                            <tr key={m.id} className="border-b">
-                                <td className="p-3 text-slate-500">{new Date(m.fecha).toLocaleString()}</td>
-                                <td className="p-3 font-bold">{m.producto?.nombre}</td>
-                                <td className="p-3">
-                                    <span className={`px-2 py-1 rounded-full text-[10px] ${m.tipo === 'ENTRADA' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                        {m.tipo}
-                                    </span>
-                                </td>
-                                <td className={`p-3 font-black ${m.tipo === 'ENTRADA' ? 'text-green-600' : 'text-red-600'}`}>
-                                    {m.tipo === 'ENTRADA' ? '+' : '-'}{m.cantidad.toFixed(1)}m
-                                </td>
-                                <td className="p-3 italic text-slate-500">{m.motivo}</td>
-                            </tr>
-                        ))}
+                        {itemsActuales.length === 0 ? (
+                            <tr><td colSpan="5" className="p-10 text-center text-slate-400">No hay movimientos en este período</td></tr>
+                        ) : (
+                            itemsActuales.map(m => (
+                                <tr key={m.id} className="border-b">
+                                    <td className="p-3 text-slate-500">{new Date(m.fecha).toLocaleString()}</td>
+                                    <td className="p-3 font-bold">{m.producto?.nombre}</td>
+                                    <td className="p-3">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] ${m.tipo === 'ENTRADA' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {m.tipo}
+                                        </span>
+                                    </td>
+                                    <td className={`p-3 font-black ${m.tipo === 'ENTRADA' ? 'text-green-600' : 'text-red-600'}`}>
+                                        {m.tipo === 'ENTRADA' ? '+' : '-'}{m.cantidad.toFixed(1)}m
+                                    </td>
+                                    <td className="p-3 italic text-slate-500">{m.motivo}</td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
 
             {movimientosFiltrados.length > 0 && (
                 <div className="flex justify-between mt-4">
-                    <button disabled={paginaActual === 1} onClick={() => setPaginaActual(p => p - 1)} className="px-5 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50 transition-all">⬅️ Anterior</button>
+                    <button disabled={paginaActual === 1} onClick={() => setPaginaActual(p => p - 1)} className="px-4 py-2 border rounded-lg">⬅️ Anterior</button>
                     <span>Página {paginaActual} de {totalPaginas}</span>
-                    <button disabled={paginaActual >= totalPaginas} onClick={() => setPaginaActual(p => p + 1)} className="px-5 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50 transition-all">Siguiente ➡️</button>
+                    <button disabled={paginaActual >= totalPaginas} onClick={() => setPaginaActual(p => p + 1)} className="px-4 py-2 border rounded-lg">Siguiente ➡️</button>
                 </div>
             )}
         </div>

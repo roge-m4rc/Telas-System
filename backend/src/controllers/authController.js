@@ -87,22 +87,22 @@ const login = async (req, res) => {
 const obtenerUsuarios = async (req, res) => {
     try {
         const usuarios = await prisma.usuario.findMany({
-            include: { rol: true },
+            select: {
+                id: true,
+                nombre: true,
+                email: true,
+                rol_id: true,
+                activo: true,
+                rol: {
+                    select: { nombre: true }
+                }
+            },
             orderBy: { id: 'asc' }
         });
-        
-        // Lo aplanamos un poco para que React lo lea sin problemas
-        const usuariosMapeados = usuarios.map(u => ({
-            id: u.id,
-            nombre: u.nombre,
-            email: u.email,
-            rol: u.rol.nombre,
-            activo: u.activo
-        }));
-        
-        res.json(usuariosMapeados);
+        res.json(usuarios);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("Error en obtenerUsuarios:", error);
+        res.status(500).json({ error: "Error al obtener usuarios" });
     }
 };
 
