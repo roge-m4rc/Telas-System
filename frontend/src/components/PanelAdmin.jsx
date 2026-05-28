@@ -112,8 +112,8 @@ export default function PanelAdmin() {
                                 <td className="p-5 font-bold text-slate-700">{u.nombre}</td>
                                 <td className="p-5 text-slate-500">{u.email}</td>
                                 <td className="p-5">
-                                    <span className={`px-3 py-1 rounded-lg text-xs font-black ${u.rol === 'Administrador' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                                        {u.rol}
+                                    <span className={`px-3 py-1 rounded-lg text-xs font-black ${u.rol?.nombre === 'Administrador' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                        {u.rol?.nombre || 'Vendedor'}
                                     </span>
                                 </td>
                                 <td className="p-5">
