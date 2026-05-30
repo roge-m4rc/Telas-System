@@ -86,18 +86,20 @@ export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
                         ))}
                     </>
                 )}
-            </nav>
 
-            {/* BOTÓN SALIR */}
-            <div className="p-4 border-t border-slate-800">
-                <button 
-                    onClick={onLogout}
-                    className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-red-500/10 text-red-400 transition-all group"
-                >
-                    <span className="text-xl group-hover:scale-110 transition-transform flex-shrink-0">🚪</span>
-                    {expandido && <span className="font-bold text-sm whitespace-nowrap">Salir del Sistema</span>}
-                </button>
-            </div>
+                {/* BOTÓN SALIR - MEJORADO PARA MÓVIL */}
+                <div className="mt-4 pt-4 border-t border-slate-800">
+                    <button 
+                        onClick={onLogout}
+                        className="w-full flex items-center justify-center lg:justify-start gap-4 p-4 rounded-xl hover:bg-red-500/10 text-red-400 transition-all active:bg-red-500/20"
+                        style={{ minHeight: '52px' }}
+                    >
+                        <span className="text-xl group-hover:scale-110 transition-transform flex-shrink-0">🚪</span>
+                        {expandido && <span className="font-bold text-sm whitespace-nowrap">Salir del Sistema</span>}
+                        {!expandido && <span className="sr-only">Salir</span>}
+                    </button>
+                </div>
+            </nav>
         </aside>
     );
 }

@@ -307,13 +307,25 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     const quitarDelCarrito = (id) => setCarrito(carrito.filter(item => item.id !== id));
     
     const cambiarPrecioItem = (id, nuevoPrecio) => {
-        const precio = parseFloat(nuevoPrecio);
-        if (isNaN(precio) || precio < 0) return;
+    // Limpiar el valor (reemplazar coma por punto y eliminar caracteres no numéricos)
+    let precioStr = nuevoPrecio.toString().replace(',', '.');
+    let precio = parseFloat(precioStr);
+        
+        if (isNaN(precio) || precio < 0) {
+            precio = 0;
+        }
+        
+        // Redondear a 2 decimales
+        precio = Math.round(precio * 100) / 100;
         
         setCarrito(prev => 
             prev.map(item => 
                 item.id === id 
-                    ? { ...item, precioVenta: precio, subtotal: precio * item.cantidad } 
+                    ? { 
+                        ...item, 
+                        precioVenta: precio,
+                        subtotal: precio * item.cantidad 
+                    } 
                     : item
             )
         );
@@ -562,7 +574,7 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                                 <p className="text-sm font-bold text-slate-800 line-clamp-1">{item.nombre}</p>
                                                 <p className="text-xs text-slate-400">Precio lista: {config?.simbolo || 'S/'} {item.precio_unit.toFixed(2)}</p>
                                             </div>
-                                            <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 hover:text-red-600 font-black px-2">✕</button>
+                                            <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 hover:text-red-600 font-black px-2 text-xl">✕</button>
                                         </div>
                                         
                                         <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
@@ -572,31 +584,43 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                                 <input 
                                                     type="number" 
                                                     step="0.1"
+                                                    lang="en"
+                                                    inputMode="decimal"
                                                     value={item.cantidad} 
                                                     onChange={(e) => {
-                                                        const nuevaCant = parseFloat(e.target.value);
-                                                        if (!isNaN(nuevaCant) && nuevaCant > 0) {
-                                                            setCarrito(prev => prev.map(i => 
-                                                                i.id === item.id 
-                                                                    ? { ...i, cantidad: nuevaCant, subtotal: (i.precioVenta || i.precio_unit) * nuevaCant }
-                                                                    : i
-                                                            ));
-                                                        }
+                                                        let val = e.target.value.replace(',', '.');
+                                                        let nuevaCant = parseFloat(val);
+                                                        if (isNaN(nuevaCant) || nuevaCant <= 0) nuevaCant = 0.1;
+                                                        setCarrito(prev => prev.map(i => 
+                                                            i.id === item.id 
+                                                                ? { ...i, cantidad: nuevaCant, subtotal: (i.precioVenta || i.precio_unit) * nuevaCant }
+                                                                : i
+                                                        ));
                                                     }}
                                                     className="w-16 p-2 border rounded-lg text-center font-bold text-sm"
                                                 />
                                             </div>
                                             
-                                            {/* Rebaja (más visible en móvil) */}
+                                            {/* Rebaja - MEJORADO PARA MÓVIL */}
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded-full">💸 Rebaja</span>
+                                                <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded-full whitespace-nowrap">💸 Rebaja</span>
                                                 <div className="flex items-center border-2 rounded-lg bg-amber-50/50 border-amber-200 px-2 py-1">
                                                     <span className="text-xs font-bold text-amber-600">{config?.simbolo || 'S/'}</span>
                                                     <input 
                                                         type="number" 
                                                         step="0.10"
+                                                        lang="en"
+                                                        inputMode="decimal"
                                                         value={item.precioVenta || item.precio_unit} 
-                                                        onChange={(e) => cambiarPrecioItem(item.id, e.target.value)}
+                                                        onChange={(e) => {
+                                                            let val = e.target.value.replace(',', '.');
+                                                            cambiarPrecioItem(item.id, val);
+                                                        }}
+                                                        onBlur={(e) => {
+                                                            let val = parseFloat(e.target.value);
+                                                            if (isNaN(val) || val < 0) val = 0;
+                                                            cambiarPrecioItem(item.id, val);
+                                                        }}
                                                         className="w-20 p-1 bg-transparent font-black text-sm text-amber-700 text-right focus:outline-none"
                                                         placeholder="0.00"
                                                     />
@@ -606,7 +630,7 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                             {/* Subtotal */}
                                             <div className="text-right min-w-[70px]">
                                                 <span className="text-[10px] text-slate-400 block font-bold">💰 Subtotal</span>
-                                                <span className="font-black text-slate-700 text-sm">
+                                                <span className="font-black text-slate-700 text-base">
                                                     {config?.simbolo || 'S/'} {((item.precioVenta || item.precio_unit) * item.cantidad).toFixed(2)}
                                                 </span>
                                             </div>
