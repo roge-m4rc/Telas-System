@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
     const [expandido, setExpandido] = useState(true);
-    const [mobileOpen, setMobileOpen] = useState(false); // 👈 Menú hamburguesa
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     const menuItems = [
         { id: 'dashboard', nombre: 'Inicio', icono: '🏠' },
@@ -21,7 +21,6 @@ export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
 
     const esAdmin = usuario?.rol === 'Administrador';
 
-    // Cerrar menú móvil al seleccionar una vista
     const handleVistaChange = (vistaId) => {
         setVista(vistaId);
         setMobileOpen(false);
@@ -32,18 +31,10 @@ export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
             {/* Botón hamburguesa para móvil */}
             <button
                 onClick={() => setMobileOpen(!mobileOpen)}
-                className="lg:hidden fixed top-4 left-4 z-50 bg-slate-800 text-white p-2 rounded-xl shadow-lg"
+                className="fixed top-4 left-4 z-50 bg-slate-800 text-white p-2 rounded-xl shadow-lg lg:hidden"
             >
                 <span className="text-2xl">{mobileOpen ? '✕' : '☰'}</span>
             </button>
-
-            {/* Overlay para móvil (fondo oscuro al abrir menú) */}
-            {mobileOpen && (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                    onClick={() => setMobileOpen(false)}
-                />
-            )}
 
             {/* Sidebar */}
             <aside 
@@ -132,6 +123,14 @@ export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
                     </button>
                 </div>
             </aside>
+
+            {/* Overlay para móvil - NO BLOQUEA EL SIDEBAR */}
+            {mobileOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                    onClick={() => setMobileOpen(false)}
+                />
+            )}
         </>
     );
 }
