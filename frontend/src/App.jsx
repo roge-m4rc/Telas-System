@@ -66,7 +66,7 @@ function App() {
       <Toaster richColors position="top-right" />
       
       {/* 🛠️ FIX: h-full overflow-y-auto para scroll interno del sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out flex-shrink-0 h-full overflow-y-auto`}>
+      <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out flex-shrink-0 h-screen overflow-y-auto`}>
         <Sidebar 
           usuario={usuario} 
           setVista={(v) => { setVistaActual(v); setSidebarAbierto(false); }} 
