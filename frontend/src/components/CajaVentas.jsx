@@ -15,7 +15,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     const [busqueda, setBusqueda] = useState('');
     const [metodoPago, setMetodoPago] = useState('EFECTIVO');
 
-    // 👇 NUEVA PAGINACIÓN
     const [paginaActual, setPaginaActual] = useState(1);
     const itemsPorPagina = 8;
 
@@ -55,7 +54,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         iniciarCaja();
     }, []);
 
-    // Resetear página cuando cambia la búsqueda
     useEffect(() => {
         setPaginaActual(1);
     }, [busqueda]);
@@ -263,7 +261,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     );
 
-    // 👇 PAGINACIÓN DE PRODUCTOS
     const totalProductos = productosFiltrados.length;
     const totalPaginas = Math.ceil(totalProductos / itemsPorPagina);
     const productosPaginados = productosFiltrados.slice(
@@ -271,16 +268,18 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         paginaActual * itemsPorPagina
     );
 
+    // ==================== LÓGICA DE DESCUENTO POR METRO ====================
+    
     const agregarRapido = (producto) => {
         if (producto.stock <= 0) {
             toast.error(`⚠️ ${producto.nombre} está agotado`);
             return;
         }
         
-        const cantStr = window.prompt(`Cuantos metros de ${producto.nombre}? (Stock: ${producto.stock}m)`, "1");
+        const cantStr = window.prompt(`¿Cuántos metros de ${producto.nombre}? (Stock: ${producto.stock}m)`, "1");
         if (!cantStr) return; 
         const cantFloat = parseFloat(cantStr);
-        if (isNaN(cantFloat) || cantFloat <= 0) return toast.error("Cantidad invalida");
+        if (isNaN(cantFloat) || cantFloat <= 0) return toast.error("Cantidad inválida");
         if (cantFloat > producto.stock) return toast.warning(`Solo quedan ${producto.stock}m!`);
 
         const itemExistente = carrito.find(item => item.id === producto.id);
@@ -289,7 +288,11 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
             if (nuevaCantidad > producto.stock) return toast.warning("Supera el stock disponible.");
             setCarrito(carrito.map(item =>
                 item.id === producto.id 
-                    ? { ...item, cantidad: nuevaCantidad, subtotal: nuevaCantidad * item.precio_unit } 
+                    ? { 
+                        ...item, 
+                        cantidad: nuevaCantidad, 
+                        subtotal: (item.precio_unit - item.descuento) * nuevaCantidad 
+                      } 
                     : item
             ));
         } else {
@@ -297,7 +300,7 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                 id: producto.id, 
                 nombre: producto.nombre, 
                 precio_unit: producto.precio,
-                precioVenta: producto.precio,
+                descuento: 0,  // Descuento por metro (inicia en 0)
                 cantidad: cantFloat, 
                 subtotal: cantFloat * producto.precio
             }]);
@@ -306,47 +309,74 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
 
     const quitarDelCarrito = (id) => setCarrito(carrito.filter(item => item.id !== id));
     
-    const cambiarPrecioItem = (id, nuevoPrecio) => {
-    // Limpiar el valor (reemplazar coma por punto y eliminar caracteres no numéricos)
-    let precioStr = nuevoPrecio.toString().replace(',', '.');
-    let precio = parseFloat(precioStr);
-        
-        if (isNaN(precio) || precio < 0) {
-            precio = 0;
+    // Cambiar descuento por metro
+    const cambiarDescuento = (id, nuevoDescuento) => {
+        let descuento = parseFloat(nuevoDescuento);
+        if (isNaN(descuento) || descuento < 0) {
+            descuento = 0;
         }
-        
-        // Redondear a 2 decimales
-        precio = Math.round(precio * 100) / 100;
         
         setCarrito(prev => 
             prev.map(item => 
                 item.id === id 
                     ? { 
                         ...item, 
-                        precioVenta: precio,
-                        subtotal: precio * item.cantidad 
-                    } 
+                        descuento: descuento,
+                        subtotal: (item.precio_unit - descuento) * item.cantidad
+                      } 
                     : item
             )
         );
     };
-
+    
+    // Cambiar cantidad
+    const cambiarCantidad = (id, nuevaCantidad) => {
+        let cantidad = parseFloat(nuevaCantidad);
+        if (isNaN(cantidad) || cantidad <= 0) cantidad = 0.1;
+        
+        setCarrito(prev => 
+            prev.map(item => 
+                item.id === id 
+                    ? { 
+                        ...item, 
+                        cantidad: cantidad,
+                        subtotal: (item.precio_unit - (item.descuento || 0)) * cantidad
+                      } 
+                    : item
+            )
+        );
+    };
+    
+    // Calcular precio final por metro
+    const calcularPrecioFinal = (item) => {
+        const precioFinal = item.precio_unit - (item.descuento || 0);
+        return precioFinal > 0 ? precioFinal : 0;
+    };
+    
+    // Calcular total final del carrito (usando descuentos)
+    const totalFinal = carrito.reduce((suma, item) => {
+        const precioFinal = calcularPrecioFinal(item);
+        return suma + (precioFinal * item.cantidad);
+    }, 0);
+    
     const porcIGV = config?.porcentaje_impuesto ?? 0.18;
-    const totalFinal = carrito.reduce((suma, item) => suma + ((item.precioVenta || item.precio_unit) * item.cantidad), 0);
     const subtotalDesglosado = totalFinal / (1 + porcIGV);
     const igvDesglosado = totalFinal - subtotalDesglosado;
 
+    // Confirmar venta con precios finales (ya con descuento aplicado)
     const confirmarVenta = async () => {
         if (carrito.length === 0) return toast.warning("El carrito esta vacio.");
+        
         const payload = {
             cliente_id: clienteId ? parseInt(clienteId) : null,
             metodo_pago: metodoPago,
             productos: carrito.map(item => ({ 
                 id: item.id, 
                 cantidad: item.cantidad, 
-                precio_unit: item.precioVenta || item.precio_unit
+                precio_unit: calcularPrecioFinal(item)
             }))
         };
+        
         try {
             const respuesta = await api.post('/ventas', payload); 
             const clienteSeleccionado = clientes.find(c => c.id === parseInt(clienteId));
@@ -356,7 +386,11 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                 fecha: new Date().toLocaleString(),
                 cliente: clienteSeleccionado ? clienteSeleccionado.nombre : 'Publico en General',
                 dni: clienteSeleccionado?.documento || '---',
-                productos: [...carrito],
+                productos: carrito.map(item => ({
+                    ...item,
+                    precio_unit: calcularPrecioFinal(item),
+                    subtotal: calcularPrecioFinal(item) * item.cantidad
+                })),
                 subtotal: subtotalDesglosado,
                 igv: igvDesglosado,
                 total: totalFinal,
@@ -465,7 +499,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                     />
                 </div>
                 
-                {/* Grid de productos con paginación */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {productosPaginados.length === 0 && busqueda && (
                         <div className="col-span-full text-center py-10 text-slate-400 font-bold">
@@ -475,27 +508,22 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                     
                     {productosPaginados.map(p => {
                         const agotado = p.stock <= 0;
-                        
                         return (
                             <button 
                                 key={p.id} 
                                 onClick={() => !agotado && agregarRapido(p)} 
                                 disabled={agotado}
-                                className={`p-4 rounded-xl shadow-sm border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden
-                                    ${agotado 
+                                className={`p-4 rounded-xl shadow-sm border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden ${
+                                    agotado 
                                         ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' 
                                         : 'bg-white border-slate-200 hover:border-blue-500 hover:shadow-md active:scale-95 cursor-pointer'
-                                    }
-                                `}
+                                }`}
                             >
                                 {agotado && (
                                     <div className="absolute top-2 right-2">
-                                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-wider shadow-sm">
-                                            Agotado
-                                        </span>
+                                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-wider shadow-sm">Agotado</span>
                                     </div>
                                 )}
-                                
                                 <div className="flex-1">
                                     <h3 className={`font-bold line-clamp-2 leading-tight text-sm ${agotado ? 'text-slate-500' : 'text-slate-800'}`}>
                                         {p.nombre}
@@ -504,7 +532,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                         Stock: {p.stock} mts
                                     </p>
                                 </div>
-                                
                                 <div className={`text-lg font-black mt-2 ${agotado ? 'text-slate-400 line-through' : 'text-blue-600'}`}>
                                     {config?.simbolo || 'S/'} {p.precio.toFixed(2)}
                                 </div>
@@ -513,172 +540,162 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                     })}
                 </div>
 
-                {/* 👇 PAGINACIÓN */}
                 {totalProductos > itemsPorPagina && (
                     <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200">
-                        <button
-                            onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                            disabled={paginaActual === 1}
-                            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-50 transition-all"
-                        >
-                            ⬅️ Anterior
-                        </button>
-                        <span className="text-sm text-slate-500 font-medium">
-                            Página {paginaActual} de {totalPaginas || 1}
-                        </span>
-                        <button
-                            onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
-                            disabled={paginaActual >= totalPaginas}
-                            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-50 transition-all"
-                        >
-                            Siguiente ➡️
-                        </button>
+                        <button onClick={() => setPaginaActual(p => Math.max(1, p - 1))} disabled={paginaActual === 1} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-50 transition-all">⬅️ Anterior</button>
+                        <span className="text-sm text-slate-500 font-medium">Página {paginaActual} de {totalPaginas || 1}</span>
+                        <button onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} disabled={paginaActual >= totalPaginas} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-50 transition-all">Siguiente ➡️</button>
                     </div>
                 )}
             </div>
 
-            {/* Columna derecha - Carrito (responsivo) */}
+            {/* Columna derecha */}
+            {/* Columna derecha - Carrito */}
             <div className="w-full lg:w-1/3">
-                <div className="bg-white rounded-2xl shadow-lg border-t-8 border-slate-800 flex flex-col lg:h-[700px] sticky top-6">
-                    <div className="p-5 border-b border-slate-100 bg-slate-50 rounded-t-xl flex flex-wrap justify-between items-start gap-3">
-                        <div>
-                            <h2 className="text-lg font-black text-slate-800">💰 Caja Actual</h2>
-                            <button onClick={handleCerrarCajaFormal} className="text-[11px] bg-red-100 text-red-600 px-3 py-1 rounded-md font-bold hover:bg-red-200 mt-1">
-                                🔒 Finalizar Turno
-                            </button>
-                        </div>
-                        <div className="w-full max-w-[180px]">
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">👤 Cliente</label>
-                            <div className="flex gap-2">
-                                <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className="flex-1 p-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-700">
-                                    <option value="">Público en General</option>
-                                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                                </select>
-                                <button onClick={() => setMostrarModalCliente(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg font-bold shadow">+</button>
+                <div className="bg-white rounded-2xl shadow-lg border-t-8 border-slate-800 flex flex-col pb-20 lg:pb-0">
+                    
+                    {/* Header */}
+                    <div className="p-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+                        <div className="flex justify-between items-start flex-wrap gap-2">
+                            <div>
+                                <h2 className="text-lg font-black text-slate-800">💰 Caja Actual</h2>
+                                <button onClick={handleCerrarCajaFormal} className="text-[11px] bg-red-100 text-red-600 px-3 py-1 rounded-md font-bold hover:bg-red-200 mt-1">
+                                    🔒 Finalizar Turno
+                                </button>
+                            </div>
+                            <div className="w-36">
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">👤 Cliente</label>
+                                <div className="flex gap-1">
+                                    <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className="flex-1 p-1 border border-slate-300 rounded-lg text-xs bg-white font-bold">
+                                        <option value="">Público</option>
+                                        {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                    </select>
+                                    <button onClick={() => setMostrarModalCliente(true)} className="bg-blue-600 text-white px-2 rounded-lg text-xs">+</button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-5 bg-slate-100/50">
+                    {/* Lista del carrito */}
+                    <div className="max-h-[300px] overflow-y-auto p-3 bg-slate-100/50 space-y-2">
                         {carrito.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                                <span className="text-4xl mb-2">🛒</span>
+                            <div className="text-center text-slate-400 py-8">
+                                <span className="text-4xl mb-2 block">🛒</span>
                                 <p className="text-sm font-medium">Carrito vacío</p>
                             </div>
                         ) : (
-                            <ul className="space-y-3">
-                                {carrito.map((item, idx) => (
-                                    <li key={idx} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100">
-                                        <div className="flex justify-between items-start mb-2">
+                            carrito.map((item, idx) => {
+                                const precioFinal = calcularPrecioFinal(item);
+                                const subtotalItem = precioFinal * item.cantidad;
+                                return (
+                                    <div key={idx} className="bg-white p-2 rounded-lg shadow-sm border border-slate-100">
+                                        <div className="flex justify-between items-start">
                                             <div className="flex-1">
-                                                <p className="text-sm font-bold text-slate-800 line-clamp-1">{item.nombre}</p>
-                                                <p className="text-xs text-slate-400">Precio lista: {config?.simbolo || 'S/'} {item.precio_unit.toFixed(2)}</p>
+                                                <p className="text-sm font-bold text-slate-800">{item.nombre}</p>
+                                                <p className="text-xs text-slate-400">
+                                                    Lista: {config?.simbolo || 'S/'} {item.precio_unit.toFixed(2)}/m
+                                                </p>
+                                                {item.descuento > 0 && (
+                                                    <p className="text-xs text-green-600">
+                                                        Final: {config?.simbolo || 'S/'} {precioFinal.toFixed(2)}/m
+                                                    </p>
+                                                )}
                                             </div>
-                                            <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 hover:text-red-600 font-black px-2 text-xl">✕</button>
+                                            <button onClick={() => quitarDelCarrito(item.id)} className="text-red-500 text-lg px-2">✕</button>
                                         </div>
                                         
-                                        <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
-                                            {/* Cantidad */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-1 rounded-full">📏 Mts</span>
+                                        <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">📏 Mts</span>
                                                 <input 
                                                     type="number" 
                                                     step="0.1"
                                                     lang="en"
                                                     inputMode="decimal"
                                                     value={item.cantidad} 
-                                                    onChange={(e) => {
-                                                        let val = e.target.value.replace(',', '.');
-                                                        let nuevaCant = parseFloat(val);
-                                                        if (isNaN(nuevaCant) || nuevaCant <= 0) nuevaCant = 0.1;
-                                                        setCarrito(prev => prev.map(i => 
-                                                            i.id === item.id 
-                                                                ? { ...i, cantidad: nuevaCant, subtotal: (i.precioVenta || i.precio_unit) * nuevaCant }
-                                                                : i
-                                                        ));
-                                                    }}
-                                                    className="w-16 p-2 border rounded-lg text-center font-bold text-sm"
+                                                    onChange={(e) => cambiarCantidad(item.id, e.target.value)}
+                                                    className="w-14 p-1 border rounded text-center text-sm"
                                                 />
                                             </div>
                                             
-                                            {/* Rebaja - MEJORADO PARA MÓVIL */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded-full whitespace-nowrap">💸 Rebaja</span>
-                                                <div className="flex items-center border-2 rounded-lg bg-amber-50/50 border-amber-200 px-2 py-1">
-                                                    <span className="text-xs font-bold text-amber-600">{config?.simbolo || 'S/'}</span>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] text-amber-500 bg-amber-50 px-1 py-0.5 rounded">💸 Dscto x m</span>
+                                                <div className="flex items-center border rounded bg-amber-50/50 px-1">
+                                                    <span className="text-xs text-amber-600">{config?.simbolo || 'S/'}</span>
                                                     <input 
                                                         type="number" 
                                                         step="0.10"
                                                         lang="en"
                                                         inputMode="decimal"
-                                                        value={item.precioVenta || item.precio_unit} 
-                                                        onChange={(e) => {
-                                                            let val = e.target.value.replace(',', '.');
-                                                            cambiarPrecioItem(item.id, val);
-                                                        }}
+                                                        value={item.descuento === 0 ? '' : item.descuento}
+                                                        onChange={(e) => cambiarDescuento(item.id, e.target.value)}
                                                         onBlur={(e) => {
                                                             let val = parseFloat(e.target.value);
                                                             if (isNaN(val) || val < 0) val = 0;
-                                                            cambiarPrecioItem(item.id, val);
+                                                            cambiarDescuento(item.id, val);
                                                         }}
-                                                        className="w-20 p-1 bg-transparent font-black text-sm text-amber-700 text-right focus:outline-none"
+                                                        className="w-16 p-1 bg-transparent font-black text-sm text-amber-700 text-right"
                                                         placeholder="0.00"
                                                     />
                                                 </div>
                                             </div>
                                             
-                                            {/* Subtotal */}
-                                            <div className="text-right min-w-[70px]">
-                                                <span className="text-[10px] text-slate-400 block font-bold">💰 Subtotal</span>
-                                                <span className="font-black text-slate-700 text-base">
-                                                    {config?.simbolo || 'S/'} {((item.precioVenta || item.precio_unit) * item.cantidad).toFixed(2)}
-                                                </span>
+                                            <div className="text-right">
+                                                <span className="text-[10px] text-slate-400 block">💰 Subtotal</span>
+                                                <span className="font-black text-sm">{config?.simbolo || 'S/'} {subtotalItem.toFixed(2)}</span>
                                             </div>
                                         </div>
-                                    </li>
-                                ))}
-                            </ul>
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
 
-                    <div className="p-5 border-t border-slate-200 bg-white rounded-b-2xl">
-                        <div className="mb-4">
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block text-center">💳 Método de Pago</label>
+                    {/* 🔥 FOOTER CON BOTÓN COBRAR - SIEMPRE VISIBLE 🔥 */}
+                    <div className="p-4 border-t border-slate-200 bg-white rounded-b-2xl">
+                        <div className="mb-3">
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block text-center">💳 Método de Pago</label>
                             <div className="flex gap-2">
                                 {['EFECTIVO', 'YAPE', 'VISA'].map(m => (
-                                    <button
-                                        key={m} onClick={() => setMetodoPago(m)}
-                                        className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all border ${
-                                            metodoPago === m ? 'bg-blue-50 border-blue-600 text-blue-700 shadow-sm' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        {m === 'YAPE' ? '📱 YAPE/PLIN' : m === 'VISA' ? '💳 VISA' : '💵 EFECTIVO'}
+                                    <button key={m} onClick={() => setMetodoPago(m)} className={`flex-1 py-2 rounded-lg text-[10px] font-black border ${metodoPago === m ? 'bg-blue-50 border-blue-600 text-blue-700' : 'bg-white border-slate-200 text-slate-500'}`}>
+                                        {m === 'YAPE' ? '📱 YAPE' : m === 'VISA' ? '💳 VISA' : '💵 EFECTIVO'}
                                     </button>
                                 ))}
                             </div>
                         </div>
-                        <div className="space-y-1 mb-4 border-t border-slate-100 pt-3">
-                            <div className="flex justify-between text-sm text-slate-500 font-medium">
+                        
+                        <div className="space-y-1 mb-3 pt-2">
+                            <div className="flex justify-between text-sm text-slate-500">
                                 <span>📄 Subtotal</span>
                                 <span>{config?.simbolo || 'S/'} {subtotalDesglosado.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-slate-500 font-medium">
+                            <div className="flex justify-between text-sm text-slate-500">
                                 <span>{config?.nombre_impuesto || 'IGV'} ({(porcIGV * 100).toFixed(0)}%)</span>
                                 <span>{config?.simbolo || 'S/'} {igvDesglosado.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-2xl font-black text-slate-900 pt-2 border-t border-slate-100 mt-2">
+                            <div className="flex justify-between text-xl font-black text-slate-900 pt-2 border-t border-slate-100 mt-2">
                                 <span>💰 TOTAL</span>
                                 <span className="text-blue-600">{config?.simbolo || 'S/'} {totalFinal.toFixed(2)}</span>
                             </div>
                         </div>
-                        <button onClick={confirmarVenta} disabled={carrito.length === 0} className={`w-full py-4 rounded-xl font-black text-lg transition-all ${carrito.length > 0 ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-200 active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+                        
+                        {/* 👇 EL BOTÓN DE COBRAR */}
+                        <button 
+                            onClick={confirmarVenta} 
+                            disabled={carrito.length === 0} 
+                            className={`w-full py-3 rounded-xl font-black text-base transition-all ${
+                                carrito.length > 0 
+                                    ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-200 active:scale-95' 
+                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            }`}
+                        >
                             💰 COBRAR {config?.simbolo || 'S/'} {totalFinal.toFixed(2)}
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Modales (sin cambios) */}
+            {/* Modales */}
             {mostrarModalCliente && (
                 <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm animate-fadeIn">

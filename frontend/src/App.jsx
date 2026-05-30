@@ -65,49 +65,56 @@ function App() {
       <GuardiaInactividad />
       <Toaster richColors position="top-right" />
       
-      {/* 🛠️ FIX: h-full overflow-y-auto para scroll interno del sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out flex-shrink-0 h-screen overflow-y-auto`}>
-        <Sidebar 
-          usuario={usuario} 
-          setVista={(v) => { setVistaActual(v); setSidebarAbierto(false); }} 
-          vistaActual={vistaActual} 
-          onLogout={cerrarSesion} 
-        />
+      {/* Sidebar - se desliza en móvil, fijo en desktop */}
+      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out ${sidebarAbierto ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 flex-shrink-0`}>
+          <Sidebar 
+              usuario={usuario} 
+              setVista={(v) => { setVistaActual(v); setSidebarAbierto(false); }} 
+              vistaActual={vistaActual} 
+              onLogout={cerrarSesion} 
+          />
       </div>
 
+      {/* Overlay para cerrar sidebar en móvil */}
       {sidebarAbierto && (
-        <div onClick={() => setSidebarAbierto(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden" />
+          <div onClick={() => setSidebarAbierto(false)} className="fixed inset-0 bg-black/50 z-40 lg:hidden" />
       )}
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-[#f1f5f9]">
-        
-        <header className="flex justify-between items-center m-4 p-4 rounded-2xl shadow-sm border border-slate-200 bg-white flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarAbierto(true)} className="lg:hidden p-2 hover:bg-slate-100 rounded-lg text-xl">
-              ☰
-            </button>
-            <h2 className="text-lg lg:text-xl font-black text-slate-700 capitalize tracking-tight">
-              {vistaActual.replace('-', ' ')}
-            </h2>
-          </div>
+      {/* Contenido principal - ocupa todo el espacio */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-black text-blue-600 leading-none">{usuario.nombre}</p>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{usuario.rol}</p>
-          </div>
-        </header>
+          {/* Header fijo */}
+          <header className="flex justify-between items-center m-4 p-4 rounded-2xl shadow-sm border border-slate-200 bg-white flex-shrink-0">
+              <div className="flex items-center gap-3">
+                  <button 
+                      onClick={() => setSidebarAbierto(true)} 
+                      className="lg:hidden p-2 hover:bg-slate-100 rounded-lg text-xl"
+                  >
+                      ☰
+                  </button>
+                  <h2 className="text-lg lg:text-xl font-black text-slate-700 capitalize tracking-tight">
+                      {vistaActual.replace('-', ' ')}
+                  </h2>
+              </div>
+              
+              <div className="text-right hidden sm:block">
+                  <p className="text-sm font-black text-blue-600 leading-none">{usuario.nombre}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{usuario.rol}</p>
+              </div>
+          </header>
 
-        <div className="animate-fadeIn flex-1 overflow-y-auto p-2 sm:p-4">
-          {vistaActual === 'dashboard'     && <Dashboard productos={productos} />}
-          {vistaActual === 'punto-venta'   && <PuntoVenta productos={productos} onVenta={cargarDatos} />}
-          {vistaActual === 'inventario'    && <InventarioTotal productos={productos} onUpdate={cargarDatos} />}
-          {vistaActual === 'clientes'      && <DirectorioClientes />}
-          {vistaActual === 'reportes'      && (esAdmin ? <Reportes />       : denegado)}
-          {vistaActual === 'ventas'        && (esAdmin ? <HistorialVentas /> : denegado)}
-          {vistaActual === 'kardex'        && (esAdmin ? <Kardex />         : denegado)}
-          {vistaActual === 'admin'         && (esAdmin ? <PanelAdmin />     : denegado)}
-          {vistaActual === 'configuracion' && (esAdmin ? <Configuracion />  : denegado)}
-        </div>
+          {/* Contenido scrolleable */}
+          <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+              {vistaActual === 'dashboard'     && <Dashboard productos={productos} />}
+              {vistaActual === 'punto-venta'   && <PuntoVenta productos={productos} onVenta={cargarDatos} />}
+              {vistaActual === 'inventario'    && <InventarioTotal productos={productos} onUpdate={cargarDatos} />}
+              {vistaActual === 'clientes'      && <DirectorioClientes />}
+              {vistaActual === 'reportes'      && (esAdmin ? <Reportes />       : denegado)}
+              {vistaActual === 'ventas'        && (esAdmin ? <HistorialVentas /> : denegado)}
+              {vistaActual === 'kardex'        && (esAdmin ? <Kardex />         : denegado)}
+              {vistaActual === 'admin'         && (esAdmin ? <PanelAdmin />     : denegado)}
+              {vistaActual === 'configuracion' && (esAdmin ? <Configuracion />  : denegado)}
+          </div>
       </main>
     </div>
   )

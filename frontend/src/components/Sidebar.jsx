@@ -21,85 +21,74 @@ export default function Sidebar({ usuario, setVista, vistaActual, onLogout }) {
     const esAdmin = usuario?.rol === 'Administrador';
 
     return (
-        <aside 
-            className={`bg-slate-900 text-white h-full transition-all duration-300 flex flex-col ${expandido ? 'w-64' : 'w-20'}`}
-        >
-            {/* BOTÓN PARA EXTENDER / CONTRAER (Desktop) */}
-            <button 
-                onClick={() => setExpandido(!expandido)}
-                className="hidden lg:flex absolute -right-3 top-10 bg-blue-600 rounded-full w-6 h-6 items-center justify-center border-2 border-slate-900 text-[10px] z-50 hover:scale-110 transition-transform shadow-lg"
-            >
-                {expandido ? '◀' : '▶'}
-            </button>
-
-            {/* LOGO */}
-            <div className="p-6 mb-4">
+        <div className="h-full flex flex-col bg-slate-900 text-white">
+            {/* Logo */}
+            <div className="flex-shrink-0 p-4 pt-6">
                 <div className="flex items-center gap-3">
-                    <div className="bg-blue-600 p-2 rounded-xl text-xl flex-shrink-0">🚀</div>
+                    <div className="bg-blue-600 p-2 rounded-xl text-xl">🚀</div>
                     {expandido && (
                         <div>
-                            <h1 className="font-black text-xl tracking-tighter whitespace-nowrap">Telas System</h1>
-                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Control y Gestión</p>
+                            <h1 className="font-black text-lg">Telas System</h1>
+                            <p className="text-[8px] text-slate-500 font-bold">Control y Gestión</p>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* NAVEGACIÓN */}
-            <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+            {/* Menú navegación - scrollable si es necesario */}
+            <div className="flex-1 overflow-y-auto px-3 space-y-1">
+                {/* Items principales */}
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => setVista(item.id)}
-                        className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all ${
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all ${
                             vistaActual === item.id 
-                            ? 'bg-blue-600 shadow-lg shadow-blue-900/40 text-white' 
-                            : 'hover:bg-slate-800/50 text-slate-400 hover:text-slate-200'
+                            ? 'bg-blue-600 text-white' 
+                            : 'hover:bg-slate-800/50 text-slate-400'
                         }`}
-                        title={!expandido ? item.nombre : ''}
                     >
-                        <span className="text-xl flex-shrink-0">{item.icono}</span>
-                        {expandido && <span className="font-bold text-sm whitespace-nowrap">{item.nombre}</span>}
+                        <span className="text-xl">{item.icono}</span>
+                        {expandido && <span className="font-bold text-sm">{item.nombre}</span>}
                     </button>
                 ))}
 
+                {/* Ajustes (solo admin) */}
                 {esAdmin && (
                     <>
-                        <div className="my-4 border-t border-slate-800 mx-2" />
+                        <div className="my-3 border-t border-slate-800" />
                         {expandido && (
-                            <p className="px-4 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">Ajustes Avanzados</p>
+                            <p className="px-2 pt-2 text-[9px] font-black text-slate-500 uppercase">Ajustes Avanzados</p>
                         )}
                         {ajustesItems.map((item) => (
                             <button
                                 key={item.id}
                                 onClick={() => setVista(item.id)}
-                                className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all ${
+                                className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all ${
                                     vistaActual === item.id 
                                     ? 'bg-blue-600 text-white' 
                                     : 'hover:bg-slate-800/50 text-slate-400'
                                 }`}
-                                title={!expandido ? item.nombre : ''}
                             >
-                                <span className="text-xl flex-shrink-0">{item.icono}</span>
-                                {expandido && <span className="font-bold text-sm whitespace-nowrap">{item.nombre}</span>}
+                                <span className="text-xl">{item.icono}</span>
+                                {expandido && <span className="font-bold text-sm">{item.nombre}</span>}
                             </button>
                         ))}
                     </>
                 )}
 
-                {/* BOTÓN SALIR - MEJORADO PARA MÓVIL */}
-                <div className="mt-4 pt-4 border-t border-slate-800">
-                    <button 
-                        onClick={onLogout}
-                        className="w-full flex items-center justify-center lg:justify-start gap-4 p-4 rounded-xl hover:bg-red-500/10 text-red-400 transition-all active:bg-red-500/20"
-                        style={{ minHeight: '52px' }}
-                    >
-                        <span className="text-xl group-hover:scale-110 transition-transform flex-shrink-0">🚪</span>
-                        {expandido && <span className="font-bold text-sm whitespace-nowrap">Salir del Sistema</span>}
-                        {!expandido && <span className="sr-only">Salir</span>}
-                    </button>
-                </div>
-            </nav>
-        </aside>
+                {/* Línea separadora antes de salir */}
+                <div className="my-3 border-t border-slate-800" />
+
+                {/* Botón SALIR - integrado como un botón más */}
+                <button
+                    onClick={onLogout}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-500/10 text-red-400 transition-all"
+                >
+                    <span className="text-xl">🚪</span>
+                    {expandido && <span className="font-bold text-sm">Salir del Sistema</span>}
+                </button>
+            </div>
+        </div>
     );
 }
