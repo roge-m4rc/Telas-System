@@ -48,17 +48,15 @@ export default function HistorialVentas() {
         }
     };
 
-    // 🔥 FILTRADO EN MEMORIA CON useMemo (solo se recalcula cuando cambian los filtros)
+    // 🔥 FILTRADO EN MEMORIA CON useMemo
     const ventasFiltradas = useMemo(() => {
         let resultado = [...ventasTotales];
         
-        // Filtrar por fechas (YYYY-MM-DD)
         resultado = resultado.filter(v => {
             const fechaVenta = new Date(v.fecha).toISOString().split('T')[0];
             return fechaVenta >= fechaDesde && fechaVenta <= fechaHasta;
         });
         
-        // Filtrar por búsqueda
         if (busqueda) {
             const termino = busqueda.toLowerCase();
             resultado = resultado.filter(v => {
@@ -68,7 +66,6 @@ export default function HistorialVentas() {
             });
         }
         
-        // Filtrar por estado
         if (filtroEstado !== 'TODOS') {
             resultado = resultado.filter(v => (v.estado || 'ACTIVA') === filtroEstado);
         }
@@ -91,7 +88,7 @@ export default function HistorialVentas() {
     };
 
     const anularVenta = async (idVenta) => {
-    const result = await Swal.fire({
+        const result = await Swal.fire({
             title: '⚠️ ¿Anular esta venta?',
             html: `
                 <p class="text-left text-sm">Esta acción:</p>
@@ -128,7 +125,7 @@ export default function HistorialVentas() {
             try {
                 await api.put(`/ventas/${idVenta}/anular`, { motivo: result.value.trim() });
                 toast.success("✅ Venta anulada correctamente");
-                cargarVentas(); // Recargar la lista
+                cargarTodasLasVentas();
             } catch (error) {
                 toast.error(error.response?.data?.error || "Error al anular la venta");
             }
@@ -141,7 +138,7 @@ export default function HistorialVentas() {
             "Boleta": `B001-${String(v.id).padStart(6, '0')}`,
             "Fecha": new Date(v.fecha).toLocaleString(),
             "Cliente": v.cliente?.nombre || 'Público General',
-            "Método": v.metodo_pago || '---',
+            "Método de Pago": v.metodo_pago || 'EFECTIVO',
             "Total": v.total?.toFixed(2),
             "Estado": v.estado || 'ACTIVA'
         }));
@@ -168,13 +165,14 @@ export default function HistorialVentas() {
             `B001-${String(v.id).padStart(6, '0')}`,
             new Date(v.fecha).toLocaleString(),
             v.cliente?.nombre || 'Público General',
+            v.metodo_pago || 'EFECTIVO',
             `S/ ${v.total?.toFixed(2)}`,
             v.estado || 'ACTIVA'
         ]);
 
         autoTable(doc, {
             startY: 35,
-            head: [['Boleta', 'Fecha', 'Cliente', 'Total', 'Estado']],
+            head: [['Boleta', 'Fecha', 'Cliente', 'Método', 'Total', 'Estado']],
             body: datosTabla,
             theme: 'grid',
             headStyles: { fillColor: [59, 130, 246] },
@@ -183,9 +181,9 @@ export default function HistorialVentas() {
         doc.save(`Historial_Ventas_${fechaDesde}_al_${fechaHasta}.pdf`);
         toast.success("PDF generado.");
     };
+
     const reimprimirTicket = async (venta) => {
         try {
-            // Obtener configuración de la empresa
             const configRes = await api.get('/configuracion');
             const config = configRes.data || {
                 nombre_empresa: 'Tienda de Telas',
@@ -198,7 +196,6 @@ export default function HistorialVentas() {
             const pageWidth = 210;
             let y = 15;
             
-            // Header
             doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
             doc.text(config.nombre_empresa, pageWidth / 2, y, { align: 'center' });
@@ -211,7 +208,6 @@ export default function HistorialVentas() {
             doc.text(config.direccion, pageWidth / 2, y, { align: 'center' });
             y += 8;
             
-            // Tipo de comprobante
             doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
             doc.text('BOLETA ELECTRONICA', pageWidth / 2, y, { align: 'center' });
@@ -220,7 +216,6 @@ export default function HistorialVentas() {
             doc.text(`B001-${String(venta.id).padStart(6, '0')}`, pageWidth / 2, y, { align: 'center' });
             y += 10;
             
-            // Datos del ticket
             doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
             doc.text(`Fecha: ${new Date(venta.fecha).toLocaleString()}`, 15, y);
@@ -234,11 +229,9 @@ export default function HistorialVentas() {
             doc.text(`Método de Pago: ${venta.metodo_pago || 'EFECTIVO'}`, 15, y);
             y += 8;
             
-            // Línea separadora
             doc.line(15, y, pageWidth - 15, y);
             y += 5;
             
-            // Tabla de productos
             const productosData = venta.detalles.map(d => [
                 d.cantidad.toFixed(1),
                 d.producto?.nombre || 'Producto eliminado',
@@ -258,7 +251,6 @@ export default function HistorialVentas() {
             
             y = doc.lastAutoTable.finalY + 8;
             
-            // Totales
             doc.setFont('helvetica', 'bold');
             doc.text(`SUBTOTAL: ${config.simbolo} ${venta.subtotal?.toFixed(2) || '0.00'}`, pageWidth - 20, y, { align: 'right' });
             y += 5;
@@ -268,7 +260,6 @@ export default function HistorialVentas() {
             doc.text(`TOTAL: ${config.simbolo} ${venta.total?.toFixed(2) || '0.00'}`, pageWidth - 20, y, { align: 'right' });
             y += 12;
             
-            // Footer
             doc.setFontSize(8);
             doc.setFont('helvetica', 'italic');
             doc.text('*** GRACIAS POR SU COMPRA ***', pageWidth / 2, y, { align: 'center' });
@@ -286,104 +277,159 @@ export default function HistorialVentas() {
     if (cargando) return <div className="p-10 text-center animate-pulse">Cargando historial...</div>;
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border-t-4 border-blue-500">
-            <div className="flex justify-between mb-6">
-                <h2 className="text-2xl font-black">📋 Historial de Ventas</h2>
-                <div className="flex gap-2">
-                    <button onClick={exportarExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg">📥 Excel</button>
-                    <button onClick={exportarPDF} className="bg-red-600 text-white px-4 py-2 rounded-lg">📄 PDF</button>
+        <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border-t-4 border-blue-500">
+            {/* Header responsivo */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h2 className="text-xl sm:text-2xl font-black">📋 Historial de Ventas</h2>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <button onClick={exportarExcel} className="flex-1 sm:flex-none bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold">📥 Excel</button>
+                    <button onClick={exportarPDF} className="flex-1 sm:flex-none bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold">📄 PDF</button>
                 </div>
             </div>
 
-            {/* FILTROS */}
+            {/* FILTROS responsivos */}
             <div className="bg-slate-50 p-4 rounded-xl mb-6 space-y-3">
-                <div className="flex gap-3">
-                    <input type="text" placeholder="🔍 Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="flex-1 p-2 border rounded-lg" />
-                    <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="p-2 border rounded-lg">
-                        <option value="TODOS">Todos</option>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <input 
+                        type="text" 
+                        placeholder="🔍 Buscar por boleta o cliente..." 
+                        value={busqueda} 
+                        onChange={(e) => setBusqueda(e.target.value)} 
+                        className="flex-1 p-2 border rounded-lg text-sm"
+                    />
+                    <select 
+                        value={filtroEstado} 
+                        onChange={(e) => setFiltroEstado(e.target.value)} 
+                        className="p-2 border rounded-lg text-sm bg-white"
+                    >
+                        <option value="TODOS">📌 Todos</option>
                         <option value="ACTIVA">🟢 Activas</option>
                         <option value="ANULADA">🔴 Anuladas</option>
                     </select>
                 </div>
-                <div className="flex gap-3">
-                    <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} className="flex-1 p-2 border rounded-lg" />
-                    <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} className="flex-1 p-2 border rounded-lg" />
-                    <button onClick={limpiarFiltros} className="px-4 py-2 bg-slate-200 rounded-lg">🗑️ Limpiar</button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <input 
+                        type="date" 
+                        value={fechaDesde} 
+                        onChange={(e) => setFechaDesde(e.target.value)} 
+                        className="flex-1 p-2 border rounded-lg text-sm"
+                    />
+                    <input 
+                        type="date" 
+                        value={fechaHasta} 
+                        onChange={(e) => setFechaHasta(e.target.value)} 
+                        className="flex-1 p-2 border rounded-lg text-sm"
+                    />
+                    <button 
+                        onClick={limpiarFiltros} 
+                        className="px-4 py-2 bg-slate-200 rounded-lg text-sm font-bold hover:bg-slate-300 transition-all"
+                    >
+                        🗑️ Limpiar
+                    </button>
                 </div>
-                <div className="text-xs text-slate-500">
-                    📅 Mostrando {ventasFiltradas.length} ventas del {fechaDesde} al {fechaHasta}
+                <div className="text-xs text-slate-500 text-center sm:text-left">
+                    📅 Mostrando <span className="font-bold text-blue-600">{ventasFiltradas.length}</span> ventas del {fechaDesde} al {fechaHasta}
                 </div>
             </div>
 
-            {/* TABLA */}
+            {/* TABLA con scroll horizontal en móvil */}
             <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[800px]">
                     <thead className="bg-slate-50">
                         <tr>
-                            <th className="p-3 text-left">Boleta</th>
-                            <th className="p-3 text-left">Fecha</th>
-                            <th className="p-3 text-left">Cliente</th>
-                            <th className="p-3 text-left">Total</th>
-                            <th className="p-3 text-left">Estado</th>
-                            {usuario.rol === 'Administrador' && <th className="p-3">Acciones</th>}
+                            <th className="p-3 text-left">🔢 Boleta</th>
+                            <th className="p-3 text-left">📅 Fecha</th>
+                            <th className="p-3 text-left">👤 Cliente</th>
+                            <th className="p-3 text-left">💳 Método</th>
+                            <th className="p-3 text-left">💰 Total</th>
+                            <th className="p-3 text-left">📌 Estado</th>
+                            {usuario.rol === 'Administrador' && <th className="p-3 text-center">⚡ Acciones</th>}
                         </tr>
                     </thead>
                     <tbody>
-                        {itemsActuales.map(v => (
-                            <tr key={v.id} className="border-b">
-                                <td className="p-3 font-mono">B001-{String(v.id).padStart(6, '0')}</td>
-                                <td className="p-3">{new Date(v.fecha).toLocaleString()}</td>
-                                <td className="p-3">{v.cliente?.nombre || 'Público General'}</td>
-                                <td className="p-3 font-bold text-blue-600">S/ {v.total?.toFixed(2)}</td>
-                                <td className="p-3">
-                                    <span className={`px-2 py-1 rounded-full text-[10px] ${v.estado === 'ANULADA' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                                        {v.estado || 'ACTIVA'}
-                                    </span>
+                        {itemsActuales.length === 0 ? (
+                            <tr>
+                                <td colSpan={usuario.rol === 'Administrador' ? 7 : 6} className="p-8 text-center text-slate-400 italic">
+                                    No hay ventas en este período
                                 </td>
-                                {usuario.rol === 'Administrador' && (
-                                    <td className="p-4 text-center">
-                                        <div className="flex gap-2 justify-center">
-                                            {(v.estado === 'ACTIVA' || !v.estado) ? (
-                                                <>
-                                                    <button 
-                                                        onClick={() => anularVenta(v.id)}
-                                                        className="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-3 py-1 rounded-lg text-xs"
-                                                    >
-                                                        🚫 Anular
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => reimprimirTicket(v)}
-                                                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-lg text-xs"
-                                                    >
-                                                        🖨️ Reimprimir
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <button 
-                                                        onClick={() => reimprimirTicket(v)}
-                                                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-lg text-xs"
-                                                    >
-                                                        🖨️ Reimprimir
-                                                    </button>
-                                                    <span className="text-slate-400 text-xs italic ml-2">Anulada</span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                )}
                             </tr>
-                        ))}
+                        ) : (
+                            itemsActuales.map(v => (
+                                <tr key={v.id} className="border-b hover:bg-slate-50 transition-colors">
+                                    <td className="p-3 font-mono text-xs sm:text-sm">B001-{String(v.id).padStart(6, '0')}</td>
+                                    <td className="p-3 text-xs sm:text-sm">{new Date(v.fecha).toLocaleString()}</td>
+                                    <td className="p-3 text-xs sm:text-sm">{v.cliente?.nombre || 'Público General'}</td>
+                                    <td className="p-3">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black whitespace-nowrap ${
+                                            v.metodo_pago === 'EFECTIVO' ? 'bg-green-100 text-green-700' :
+                                            v.metodo_pago === 'YAPE' ? 'bg-purple-100 text-purple-700' :
+                                            'bg-blue-100 text-blue-700'
+                                        }`}>
+                                            {v.metodo_pago || 'EFECTIVO'}
+                                        </span>
+                                    </td>
+                                    <td className="p-3 font-bold text-blue-600 whitespace-nowrap">S/ {v.total?.toFixed(2)}</td>
+                                    <td className="p-3">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black whitespace-nowrap ${v.estado === 'ANULADA' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                                            {v.estado || 'ACTIVA'}
+                                        </span>
+                                    </td>
+                                    {usuario.rol === 'Administrador' && (
+                                        <td className="p-3">
+                                            <div className="flex gap-2 justify-center flex-wrap">
+                                                {(v.estado === 'ACTIVA' || !v.estado) ? (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => anularVenta(v.id)}
+                                                            className="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-3 py-1 rounded-lg text-xs whitespace-nowrap"
+                                                        >
+                                                            🚫 Anular
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => reimprimirTicket(v)}
+                                                            className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-lg text-xs whitespace-nowrap"
+                                                        >
+                                                            🖨️ Reimprimir
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => reimprimirTicket(v)}
+                                                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-lg text-xs whitespace-nowrap"
+                                                    >
+                                                        🖨️ Reimprimir
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    )}
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
 
-            {/* PAGINACIÓN */}
+            {/* PAGINACIÓN responsiva */}
             {ventasFiltradas.length > 0 && (
-                <div className="flex justify-between mt-4">
-                    <button disabled={paginaActual === 1} onClick={() => setPaginaActual(p => p - 1)} className="px-5 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50 transition-all">⬅️ Anterior</button>
-                    <span>Página {paginaActual} de {totalPaginas}</span>
-                    <button disabled={paginaActual >= totalPaginas} onClick={() => setPaginaActual(p => p + 1)} className="px-5 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50 transition-all">Siguiente ➡️</button>
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 pt-4 border-t border-slate-200">
+                    <button 
+                        disabled={paginaActual === 1} 
+                        onClick={() => setPaginaActual(p => p - 1)} 
+                        className="w-full sm:w-auto px-5 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50 transition-all"
+                    >
+                        ⬅️ Anterior
+                    </button>
+                    <span className="text-sm font-medium text-slate-500">
+                        Página <span className="text-blue-600 font-black">{paginaActual}</span> de {totalPaginas || 1}
+                    </span>
+                    <button 
+                        disabled={paginaActual >= totalPaginas} 
+                        onClick={() => setPaginaActual(p => p + 1)} 
+                        className="w-full sm:w-auto px-5 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 disabled:opacity-40 hover:bg-slate-50 transition-all"
+                    >
+                        Siguiente ➡️
+                    </button>
                 </div>
             )}
         </div>

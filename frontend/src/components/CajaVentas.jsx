@@ -15,6 +15,10 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     const [busqueda, setBusqueda] = useState('');
     const [metodoPago, setMetodoPago] = useState('EFECTIVO');
 
+    // 👇 NUEVA PAGINACIÓN
+    const [paginaActual, setPaginaActual] = useState(1);
+    const itemsPorPagina = 8;
+
     const [config, setConfig] = useState({
         nombre_empresa: 'Cargando...',
         ruc: '...',
@@ -50,6 +54,11 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         };
         iniciarCaja();
     }, []);
+
+    // Resetear página cuando cambia la búsqueda
+    useEffect(() => {
+        setPaginaActual(1);
+    }, [busqueda]);
 
     const handleAbrirCaja = async (e) => {
         e.preventDefault();
@@ -250,12 +259,18 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         }
     };
 
-    // ✅ MODIFICADO: Mostrar TODOS los productos (incluyendo agotados)
     const productosFiltrados = productos.filter(p => 
         p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     );
 
-    // ✅ MODIFICADO: Validación extra para productos agotados
+    // 👇 PAGINACIÓN DE PRODUCTOS
+    const totalProductos = productosFiltrados.length;
+    const totalPaginas = Math.ceil(totalProductos / itemsPorPagina);
+    const productosPaginados = productosFiltrados.slice(
+        (paginaActual - 1) * itemsPorPagina,
+        paginaActual * itemsPorPagina
+    );
+
     const agregarRapido = (producto) => {
         if (producto.stock <= 0) {
             toast.error(`⚠️ ${producto.nombre} está agotado`);
@@ -281,8 +296,8 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
             setCarrito([...carrito, {
                 id: producto.id, 
                 nombre: producto.nombre, 
-                precio_unit: producto.precio,     // Precio original (para referencia)
-                precioVenta: producto.precio,     // 👈 Precio editable (para rebajas)
+                precio_unit: producto.precio,
+                precioVenta: producto.precio,
                 cantidad: cantFloat, 
                 subtotal: cantFloat * producto.precio
             }]);
@@ -290,19 +305,16 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     };
 
     const quitarDelCarrito = (id) => setCarrito(carrito.filter(item => item.id !== id));
+    
     const cambiarPrecioItem = (id, nuevoPrecio) => {
         const precio = parseFloat(nuevoPrecio);
         if (isNaN(precio) || precio < 0) return;
         
         setCarrito(prev => 
             prev.map(item => 
-                    item.id === id 
-                        ? { 
-                            ...item, 
-                            precioVenta: precio,
-                            subtotal: precio * item.cantidad 
-                        } 
-                        : item
+                item.id === id 
+                    ? { ...item, precioVenta: precio, subtotal: precio * item.cantidad } 
+                    : item
             )
         );
     };
@@ -320,8 +332,9 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
             productos: carrito.map(item => ({ 
                 id: item.id, 
                 cantidad: item.cantidad, 
-                precio_unit: item.precioVenta || item.precio_unit  // 👈 Usa el precio con rebaja
-            }))};
+                precio_unit: item.precioVenta || item.precio_unit
+            }))
+        };
         try {
             const respuesta = await api.post('/ventas', payload); 
             const clienteSeleccionado = clientes.find(c => c.id === parseInt(clienteId));
@@ -429,9 +442,10 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     return (
         <div className="flex flex-col lg:flex-row gap-6 relative">
             
+            {/* Columna izquierda - Productos */}
             <div className="w-full lg:w-2/3 flex flex-col gap-4">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">Buscar Tela</h2>
+                    <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">🔍 Buscar Tela</h2>
                     <input 
                         type="text" placeholder="Ej: Lino, Seda, color..." 
                         value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
@@ -439,15 +453,15 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                     />
                 </div>
                 
-                {/* ✅ GRID DE PRODUCTOS MODIFICADO - CON PRODUCTOS AGOTADOS */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto pb-4 pr-2">
-                    {productosFiltrados.length === 0 && busqueda && (
+                {/* Grid de productos con paginación */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {productosPaginados.length === 0 && busqueda && (
                         <div className="col-span-full text-center py-10 text-slate-400 font-bold">
                             No se encontraron productos
                         </div>
                     )}
                     
-                    {productosFiltrados.map(p => {
+                    {productosPaginados.map(p => {
                         const agotado = p.stock <= 0;
                         
                         return (
@@ -462,7 +476,6 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                     }
                                 `}
                             >
-                                {/* Badge de AGOTADO */}
                                 {agotado && (
                                     <div className="absolute top-2 right-2">
                                         <span className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-wider shadow-sm">
@@ -487,22 +500,46 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                         );
                     })}
                 </div>
+
+                {/* 👇 PAGINACIÓN */}
+                {totalProductos > itemsPorPagina && (
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200">
+                        <button
+                            onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+                            disabled={paginaActual === 1}
+                            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-50 transition-all"
+                        >
+                            ⬅️ Anterior
+                        </button>
+                        <span className="text-sm text-slate-500 font-medium">
+                            Página {paginaActual} de {totalPaginas || 1}
+                        </span>
+                        <button
+                            onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
+                            disabled={paginaActual >= totalPaginas}
+                            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-slate-50 transition-all"
+                        >
+                            Siguiente ➡️
+                        </button>
+                    </div>
+                )}
             </div>
 
+            {/* Columna derecha - Carrito (responsivo) */}
             <div className="w-full lg:w-1/3">
-                <div className="bg-white rounded-2xl shadow-lg border-t-8 border-slate-800 flex flex-col h-[700px] sticky top-6">
-                    <div className="p-5 border-b border-slate-100 bg-slate-50 rounded-t-xl flex justify-between items-start">
+                <div className="bg-white rounded-2xl shadow-lg border-t-8 border-slate-800 flex flex-col lg:h-[700px] sticky top-6">
+                    <div className="p-5 border-b border-slate-100 bg-slate-50 rounded-t-xl flex flex-wrap justify-between items-start gap-3">
                         <div>
-                            <h2 className="text-lg font-black text-slate-800">Caja Actual</h2>
+                            <h2 className="text-lg font-black text-slate-800">💰 Caja Actual</h2>
                             <button onClick={handleCerrarCajaFormal} className="text-[11px] bg-red-100 text-red-600 px-3 py-1 rounded-md font-bold hover:bg-red-200 mt-1">
-                                Finalizar Turno
+                                🔒 Finalizar Turno
                             </button>
                         </div>
-                        <div className="mt-1 w-full max-w-[180px]">
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Cliente</label>
+                        <div className="w-full max-w-[180px]">
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">👤 Cliente</label>
                             <div className="flex gap-2">
                                 <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className="flex-1 p-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-700">
-                                    <option value="">Publico en General</option>
+                                    <option value="">Público en General</option>
                                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                                 </select>
                                 <button onClick={() => setMostrarModalCliente(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg font-bold shadow">+</button>
@@ -514,13 +551,13 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                         {carrito.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-400">
                                 <span className="text-4xl mb-2">🛒</span>
-                                <p className="text-sm font-medium">Carrito vacio</p>
+                                <p className="text-sm font-medium">Carrito vacío</p>
                             </div>
                         ) : (
                             <ul className="space-y-3">
                                 {carrito.map((item, idx) => (
                                     <li key={idx} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100">
-                                        <div className="flex justify-between items-start">
+                                        <div className="flex justify-between items-start mb-2">
                                             <div className="flex-1">
                                                 <p className="text-sm font-bold text-slate-800 line-clamp-1">{item.nombre}</p>
                                                 <p className="text-xs text-slate-400">Precio lista: {config?.simbolo || 'S/'} {item.precio_unit.toFixed(2)}</p>
@@ -528,10 +565,10 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                             <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 hover:text-red-600 font-black px-2">✕</button>
                                         </div>
                                         
-                                        <div className="flex items-center justify-between mt-2 gap-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
                                             {/* Cantidad */}
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-slate-400 font-bold">Mts:</span>
+                                                <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-1 rounded-full">📏 Mts</span>
                                                 <input 
                                                     type="number" 
                                                     step="0.1"
@@ -546,15 +583,15 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                                             ));
                                                         }
                                                     }}
-                                                    className="w-16 p-1 border rounded-lg text-center font-bold text-sm"
+                                                    className="w-16 p-2 border rounded-lg text-center font-bold text-sm"
                                                 />
                                             </div>
                                             
-                                            {/* Precio con rebaja */}
+                                            {/* Rebaja (más visible en móvil) */}
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-amber-500 font-bold">Rebaja:</span>
-                                                <div className="flex items-center border rounded-lg bg-amber-50/50 border-amber-200 px-1">
-                                                    <span className="text-xs font-bold text-amber-600 pl-1">{config?.simbolo || 'S/'}</span>
+                                                <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded-full">💸 Rebaja</span>
+                                                <div className="flex items-center border-2 rounded-lg bg-amber-50/50 border-amber-200 px-2 py-1">
+                                                    <span className="text-xs font-bold text-amber-600">{config?.simbolo || 'S/'}</span>
                                                     <input 
                                                         type="number" 
                                                         step="0.10"
@@ -567,13 +604,13 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                             </div>
                                             
                                             {/* Subtotal */}
-                                            <div className="text-right">
-                                                <span className="text-[10px] text-slate-400 block font-bold">Subtotal</span>
-                                                 <span className="font-black text-slate-700 text-sm">
-                                                        {config?.simbolo || 'S/'} {((item.precioVenta || item.precio_unit) * item.cantidad).toFixed(2)}
-                                                    </span>
-                                                </div>
+                                            <div className="text-right min-w-[70px]">
+                                                <span className="text-[10px] text-slate-400 block font-bold">💰 Subtotal</span>
+                                                <span className="font-black text-slate-700 text-sm">
+                                                    {config?.simbolo || 'S/'} {((item.precioVenta || item.precio_unit) * item.cantidad).toFixed(2)}
+                                                </span>
                                             </div>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -582,7 +619,7 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
 
                     <div className="p-5 border-t border-slate-200 bg-white rounded-b-2xl">
                         <div className="mb-4">
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block text-center">Metodo de Pago</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block text-center">💳 Método de Pago</label>
                             <div className="flex gap-2">
                                 {['EFECTIVO', 'YAPE', 'VISA'].map(m => (
                                     <button
@@ -591,14 +628,14 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                             metodoPago === m ? 'bg-blue-50 border-blue-600 text-blue-700 shadow-sm' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                                         }`}
                                     >
-                                        {m === 'YAPE' ? 'YAPE/PLIN' : m === 'VISA' ? 'VISA' : 'EFECTIVO'}
+                                        {m === 'YAPE' ? '📱 YAPE/PLIN' : m === 'VISA' ? '💳 VISA' : '💵 EFECTIVO'}
                                     </button>
                                 ))}
                             </div>
                         </div>
                         <div className="space-y-1 mb-4 border-t border-slate-100 pt-3">
                             <div className="flex justify-between text-sm text-slate-500 font-medium">
-                                <span>Subtotal</span>
+                                <span>📄 Subtotal</span>
                                 <span>{config?.simbolo || 'S/'} {subtotalDesglosado.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-sm text-slate-500 font-medium">
@@ -606,37 +643,38 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                                 <span>{config?.simbolo || 'S/'} {igvDesglosado.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-2xl font-black text-slate-900 pt-2 border-t border-slate-100 mt-2">
-                                <span>TOTAL</span>
+                                <span>💰 TOTAL</span>
                                 <span className="text-blue-600">{config?.simbolo || 'S/'} {totalFinal.toFixed(2)}</span>
                             </div>
                         </div>
                         <button onClick={confirmarVenta} disabled={carrito.length === 0} className={`w-full py-4 rounded-xl font-black text-lg transition-all ${carrito.length > 0 ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-200 active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
-                            COBRAR {config?.simbolo || 'S/'} {totalFinal.toFixed(2)}
+                            💰 COBRAR {config?.simbolo || 'S/'} {totalFinal.toFixed(2)}
                         </button>
                     </div>
                 </div>
             </div>
 
+            {/* Modales (sin cambios) */}
             {mostrarModalCliente && (
                 <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm animate-fadeIn">
-                        <h2 className="text-2xl font-black text-slate-800 mb-6">Nuevo Cliente</h2>
+                        <h2 className="text-2xl font-black text-slate-800 mb-6">➕ Nuevo Cliente</h2>
                         <form onSubmit={guardarClienteRapido} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Completo</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">📛 Nombre Completo</label>
                                 <input required type="text" className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700" value={nuevoCliente.nombre} onChange={(e) => setNuevoCliente({...nuevoCliente, nombre: e.target.value})}/>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">DNI / RUC</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">🆔 DNI / RUC</label>
                                 <input type="text" className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" value={nuevoCliente.documento} onChange={(e) => setNuevoCliente({...nuevoCliente, documento: e.target.value})}/>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1" placeholder="Opcional">Telefono</label>
-                                <input type="text" className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" value={nuevoCliente.telefono} onChange={(e) => setNuevoCliente({...nuevoCliente, telefono: e.target.value})}/>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">📞 Teléfono</label>
+                                <input type="tel" className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-700 font-mono" value={nuevoCliente.telefono} onChange={(e) => setNuevoCliente({...nuevoCliente, telefono: e.target.value})}/>
                             </div>
                             <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
-                                <button type="button" onClick={() => setMostrarModalCliente(false)} className="w-1/2 bg-slate-100 text-slate-600 font-bold p-3 rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                                <button type="submit" className="w-1/2 bg-blue-600 text-white font-black p-3 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">Guardar</button>
+                                <button type="button" onClick={() => setMostrarModalCliente(false)} className="w-1/2 bg-slate-100 text-slate-600 font-bold p-3 rounded-xl hover:bg-slate-200 transition-colors">❌ Cancelar</button>
+                                <button type="submit" className="w-1/2 bg-blue-600 text-white font-black p-3 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">✅ Guardar</button>
                             </div>
                         </form>
                     </div>
@@ -650,19 +688,19 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                             <h2 className="text-2xl font-black text-gray-800 uppercase tracking-widest">{config?.nombre_empresa || 'SISTEMA'}</h2>
                             <p className="text-gray-500 text-xs mt-1 font-bold">RUC: {config?.ruc || '---'}</p>
                             <p className="text-gray-500 text-xs font-bold">{config?.direccion || 'Ayacucho, Peru'}</p>
-                            <h3 className="text-lg font-black mt-3">BOLETA ELECTRONICA</h3>
+                            <h3 className="text-lg font-black mt-3">🧾 BOLETA ELECTRÓNICA</h3>
                             <p className="font-bold text-slate-700">B001-{String(ticket.nroVenta).padStart(6, '0')}</p>
                         </div>
                         <div className="mb-4 text-xs text-left space-y-1 font-bold text-slate-600">
-                            <p><span className="text-slate-400">Fecha:</span> {ticket.fecha}</p>
-                            <p><span className="text-slate-400">Cliente:</span> {ticket.cliente}</p>
-                            <p><span className="text-slate-400">Doc:</span> {ticket.dni}</p>
-                            <p><span className="text-slate-400">Pago:</span> {ticket.metodo}</p>
+                            <p><span className="text-slate-400">📅 Fecha:</span> {ticket.fecha}</p>
+                            <p><span className="text-slate-400">👤 Cliente:</span> {ticket.cliente}</p>
+                            <p><span className="text-slate-400">🆔 Doc:</span> {ticket.dni}</p>
+                            <p><span className="text-slate-400">💳 Pago:</span> {ticket.metodo}</p>
                         </div>
                         <div className="border-t-2 border-b-2 border-dashed border-gray-300 py-3 mb-4">
                             <table className="w-full text-xs text-left font-bold text-slate-700">
                                 <thead>
-                                    <tr><th className="pb-2 text-slate-400">Cant.</th><th className="pb-2 text-slate-400">Desc.</th><th className="pb-2 text-right text-slate-400">Imp.</th></tr>
+                                    <tr className="text-slate-400"><th className="pb-2">Cant.</th><th className="pb-2">Desc.</th><th className="pb-2 text-right">Importe</th></tr>
                                 </thead>
                                 <tbody>
                                     {ticket.productos.map((p, i) => (
@@ -676,15 +714,13 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                             </table>
                         </div>
                         <div className="text-right text-xs space-y-1 mb-6 font-bold text-slate-600">
-                            <p>SUBTOTAL: {config?.simbolo || 'S/'} {ticket.subtotal.toFixed(2)}</p>
-                            <p>{config?.nombre_impuesto || 'IGV'} ({(porcIGV * 100).toFixed(0)}%): {config?.simbolo || 'S/'} {ticket.igv.toFixed(2)}</p>
-                            <p className="text-xl font-black mt-3 border-t-2 border-slate-800 pt-3 text-slate-900">
-                                TOTAL: {config?.simbolo || 'S/'} {ticket.total.toFixed(2)}
-                            </p>
+                            <p>📄 SUBTOTAL: {config?.simbolo || 'S/'} {ticket.subtotal.toFixed(2)}</p>
+                            <p>🧾 {config?.nombre_impuesto || 'IGV'} ({(porcIGV * 100).toFixed(0)}%): {config?.simbolo || 'S/'} {ticket.igv.toFixed(2)}</p>
+                            <p className="text-xl font-black mt-3 border-t-2 border-slate-800 pt-3 text-slate-900">💰 TOTAL: {config?.simbolo || 'S/'} {ticket.total.toFixed(2)}</p>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => setTicket(null)} className="w-1/2 bg-slate-100 p-3 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Siguiente Venta</button>
-                            <button onClick={imprimirTicket} className="w-1/2 bg-blue-600 text-white p-3 rounded-xl font-black shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">Imprimir</button>
+                            <button onClick={() => setTicket(null)} className="w-1/2 bg-slate-100 p-3 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">⏭️ Siguiente Venta</button>
+                            <button onClick={imprimirTicket} className="w-1/2 bg-blue-600 text-white p-3 rounded-xl font-black shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">🖨️ Imprimir</button>
                         </div>
                     </div>
                 </div>
@@ -708,21 +744,11 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                         <div className="mb-1"><span className="font-bold">METODO :</span> ${ticket.metodo}</div>
                     </div>
                     <div className="divisor"></div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>CANT</th>
-                                <th>DESCRIPCION</th>
-                                <th className="text-right">IMPORTE</th>
-                            </tr>
-                        </thead>
+                    <table className="w-full text-left">
+                        <thead><tr><th>CANT</th><th>DESCRIPCION</th><th className="text-right">IMPORTE</th></tr></thead>
                         <tbody>
                             ${ticket.productos.map(p => `
-                                <tr>
-                                    <td>${p.cantidad}m</td>
-                                    <td>${p.nombre}</td>
-                                    <td class="text-right">${config?.simbolo || 'S/'} ${p.subtotal.toFixed(2)}</td>
-                                </tr>
+                                <tr><td>${p.cantidad}m</td><td>${p.nombre}</td><td class="text-right">${config?.simbolo || 'S/'} ${p.subtotal.toFixed(2)}</td></tr>
                             `).join('')}
                         </tbody>
                     </table>
@@ -730,7 +756,7 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
                     <div className="text-right mb-4">
                         <div className="mb-1">SUBTOTAL: ${config?.simbolo || 'S/'} ${ticket.subtotal.toFixed(2)}</div>
                         <div className="mb-1">${config?.nombre_impuesto || 'IGV'}: ${config?.simbolo || 'S/'} ${ticket.igv.toFixed(2)}</div>
-                        <div class="font-bold text-xl mt-2">TOTAL: ${config?.simbolo || 'S/'} ${ticket.total.toFixed(2)}</div>
+                        <div className="font-bold text-xl mt-2">TOTAL: ${config?.simbolo || 'S/'} ${ticket.total.toFixed(2)}</div>
                     </div>
                     <div className="text-center mt-2">
                         <div className="font-bold mb-1">*** GRACIAS POR SU COMPRA ***</div>
