@@ -1,16 +1,10 @@
+import { obtenerFechaPeru, obtenerFechaLocalPeru } from '../utils/fechaPeru';
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import api from '../services/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-const obtenerFechaLocalPeru = () => {
-    const fecha = new Date();
-    const opciones = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
-    const formateador = new Intl.DateTimeFormat('fr-CA', opciones);
-    return formateador.format(fecha);
-};
 
 export default function Kardex() {
     const [movimientosTotales, setMovimientosTotales] = useState([]);
@@ -49,7 +43,7 @@ export default function Kardex() {
         
         // Filtrar por fechas
         resultado = resultado.filter(m => {
-            const fechaMov = new Date(m.fecha).toISOString().split('T')[0];
+            const fechaMov = obtenerFechaPeru(m.fecha);
             return fechaMov >= fechaDesde && fechaMov <= fechaHasta;
         });
         

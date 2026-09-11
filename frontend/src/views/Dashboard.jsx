@@ -1,3 +1,4 @@
+import { obtenerFechaPeru } from '../utils/fechaPeru';
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -279,7 +280,7 @@ export default function Dashboard({ productos = [] }) {
 
     const historialFiltrado = historialCajas.filter(c => {
         if (!filtroFecha) return true;
-        const fechaCaja = new Date(c.fecha_apertura).toISOString().split('T')[0];
+        const fechaCaja = obtenerFechaPeru(c.fecha_apertura);
         return fechaCaja === filtroFecha;
     });
 

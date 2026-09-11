@@ -1,16 +1,10 @@
+import { obtenerFechaPeru, obtenerFechaLocalPeru } from '../utils/fechaPeru';
 import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
-
-const obtenerFechaLocalPeru = () => {
-    const fecha = new Date();
-    const opciones = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
-    const formateador = new Intl.DateTimeFormat('fr-CA', opciones);
-    return formateador.format(fecha);
-};
 
 export default function Reportes() {
     const [ventasTotales, setVentasTotales] = useState([]);
@@ -39,7 +33,7 @@ export default function Reportes() {
     // Filtrar por fechas
     const ventasFiltradas = useMemo(() => {
         return ventasTotales.filter(v => {
-            const fechaVenta = new Date(v.fecha).toISOString().split('T')[0];
+            const fechaVenta = obtenerFechaPeru(v.fecha);
             return fechaVenta >= fechas.inicio && fechaVenta <= fechas.fin;
         });
     }, [ventasTotales, fechas.inicio, fechas.fin]);
