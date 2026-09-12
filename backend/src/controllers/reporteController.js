@@ -1,26 +1,38 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+const obtenerPeriodosPeru = (ahora) => {
+    const partes = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(ahora);
+    const valor = (tipo) => Number(partes.find(parte => parte.type === tipo).value);
+    const anio = valor('year');
+    const mes = valor('month') - 1;
+    const dia = valor('day');
+
+    // Medianoche del calendario Perú (UTC-05:00) equivale a las 05:00 UTC.
+    // Date.UTC normaliza los cambios de mes/año sin usar la zona del servidor.
+    return {
+        inicioDia: new Date(Date.UTC(anio, mes, dia, 5)),
+        siguienteDia: new Date(Date.UTC(anio, mes, dia + 1, 5)),
+        inicioMes: new Date(Date.UTC(anio, mes, 1, 5)),
+        siguienteMes: new Date(Date.UTC(anio, mes + 1, 1, 5)),
+        inicioTendencia: new Date(Date.UTC(anio, mes, dia - 6, 5))
+    };
+};
+
 const obtenerResumenGeneral = async (req, res) => {
     try {
-        // 1. Configuración de Zona Horaria Perú (UTC-5)
-        const ahora = new Date();
-        
-        // Calcular inicio del día en Perú (00:00:00 UTC-5)
-        const inicioDia = new Date(ahora);
-        inicioDia.setHours(ahora.getHours() - 5, 0, 0, 0);
-        
-        // Calcular inicio del mes
-        const inicioMes = new Date(inicioDia);
-        inicioMes.setDate(1);
-        inicioMes.setHours(0, 0, 0, 0);
+        // 1. Límites semiabiertos del calendario de America/Lima.
+        const { inicioDia, siguienteDia, inicioMes, siguienteMes, inicioTendencia } =
+            obtenerPeriodosPeru(new Date());
         
         // 2. Ventas de hoy (usando Prisma sin SQL crudo)
         const ventasHoy = await prisma.venta.aggregate({
             _sum: { total: true },
             _count: { id: true },
             where: { 
-                fecha: { gte: inicioDia },
+                fecha: { gte: inicioDia, lt: siguienteDia },
                 estado: 'ACTIVA' 
             }
         });
@@ -29,7 +41,7 @@ const obtenerResumenGeneral = async (req, res) => {
         const ventasMes = await prisma.venta.aggregate({
             _sum: { total: true },
             where: {
-                fecha: { gte: inicioMes },
+                fecha: { gte: inicioMes, lt: siguienteMes },
                 estado: 'ACTIVA'
             }
         });
@@ -45,23 +57,22 @@ const obtenerResumenGeneral = async (req, res) => {
         });
 
         // 5. Gráfico de ventas últimos 7 días (usando Prisma, no SQL crudo)
-        const sieteDiasAtras = new Date(inicioDia);
-        sieteDiasAtras.setDate(sieteDiasAtras.getDate() - 7);
-
-        // Obtener ventas de los últimos 7 días
+        // Hoy y los seis días anteriores, hasta la próxima medianoche Perú.
         const ventasSemanalesRaw = await prisma.venta.findMany({
             where: {
-                fecha: { gte: sieteDiasAtras },
+                fecha: { gte: inicioTendencia, lt: siguienteDia },
                 estado: 'ACTIVA'
             },
             select: { fecha: true, total: true },
             orderBy: { fecha: 'asc' }
         });
 
-        // Agrupar por fecha en el frontend (evitamos SQL complejo)
+        // Agrupar por día calendario Perú, manteniendo las etiquetas del gráfico.
         const agrupadoPorFecha = {};
         ventasSemanalesRaw.forEach(v => {
-            const fechaKey = new Date(v.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+            const fechaKey = new Date(v.fecha).toLocaleDateString('es-PE', {
+                timeZone: 'America/Lima', day: '2-digit', month: 'short'
+            });
             agrupadoPorFecha[fechaKey] = (agrupadoPorFecha[fechaKey] || 0) + Number(v.total);
         });
 
@@ -73,7 +84,7 @@ const obtenerResumenGeneral = async (req, res) => {
         // 6. Ventas agrupadas por método de pago (Hoy) - usando Prisma
         const ventasHoyRaw = await prisma.venta.findMany({
             where: {
-                fecha: { gte: inicioDia },
+                fecha: { gte: inicioDia, lt: siguienteDia },
                 estado: 'ACTIVA'
             },
             select: { metodo_pago: true, total: true }
