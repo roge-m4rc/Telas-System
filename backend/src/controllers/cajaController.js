@@ -1,32 +1,24 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-const obtenerInicioDiaPeru = () => {
-    const ahora = new Date();
-    const fechaPeru = ahora.toLocaleString("en-US", { timeZone: "America/Lima" });
-    const [datePart] = fechaPeru.split(', ');
-    const [month, day, year] = datePart.split('/');
-    return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 5, 0, 0));
-};
-
 const estadoCaja = async (req, res) => {
     try {
-        const inicioDiaPeru = obtenerInicioDiaPeru();
         const cajaAbierta = await prisma.sesionCaja.findFirst({
-            where: { estado: 'ABIERTA' },
+            where: { usuario_id: req.usuario.id, estado: 'ABIERTA' },
             include: { usuario: true }
         });
-        const ventasHoy = await prisma.venta.aggregate({
+        const ventasSesion = cajaAbierta ? await prisma.venta.aggregate({
             _sum: { total: true },
             where: { 
-                fecha: { gte: inicioDiaPeru },
+                sesion_id: cajaAbierta.id,
                 estado: 'ACTIVA'
             }
-        });
+        }) : null;
         res.json({
             abierta: !!cajaAbierta,
             datos: cajaAbierta,
-            totalVentasHoy: Number(ventasHoy._sum.total || 0)
+            // Nombre conservado por compatibilidad: total activo del turno, no del día.
+            totalVentasHoy: Number(ventasSesion?._sum.total || 0)
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
