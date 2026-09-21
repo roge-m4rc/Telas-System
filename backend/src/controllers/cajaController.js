@@ -14,9 +14,26 @@ const estadoCaja = async (req, res) => {
                 estado: 'ACTIVA'
             }
         }) : null;
+        const gastos = cajaAbierta ? await prisma.gasto.findMany({
+            where: { sesion_id: cajaAbierta.id },
+            select: { id: true, descripcion: true, monto: true, fecha: true },
+            orderBy: [{ fecha: 'asc' }, { id: 'asc' }]
+        }) : [];
+        const totalGastos = gastos.reduce((total, gasto) => {
+            if (!Number.isFinite(gasto.monto)) {
+                throw new Error('No se pueden consultar los gastos: hay un monto inválido.');
+            }
+            const suma = total + gasto.monto;
+            if (!Number.isFinite(suma)) {
+                throw new Error('No se pueden consultar los gastos: el total no es válido.');
+            }
+            return suma;
+        }, 0);
         res.json({
             abierta: !!cajaAbierta,
             datos: cajaAbierta,
+            gastos,
+            totalGastos,
             // Nombre conservado por compatibilidad: total activo del turno, no del día.
             totalVentasHoy: Number(ventasSesion?._sum.total || 0)
         });

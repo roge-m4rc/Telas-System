@@ -7,6 +7,29 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     const [cajaAbierta, setCajaAbierta] = useState(true); 
     const [cargandoCaja, setCargandoCaja] = useState(true);
     const [montoInicial, setMontoInicial] = useState('');
+    const [resumenGastos, setResumenGastos] = useState(null);
+    const [actualizandoGastos, setActualizandoGastos] = useState(false);
+    const [errorGastos, setErrorGastos] = useState(false);
+
+    const actualizarGastos = async () => {
+        setActualizandoGastos(true);
+        try {
+            const { data } = await api.get('/ventas/caja/estado');
+            if (!Array.isArray(data?.gastos) || !Number.isFinite(data.totalGastos) ||
+                data.gastos.some(gasto => !Number.isFinite(gasto?.monto))) {
+                throw new Error('El resumen de gastos no contiene montos válidos.');
+            }
+            setCajaAbierta(!!data.abierta);
+            setResumenGastos(data);
+            setErrorGastos(false);
+            return data;
+        } catch (error) {
+            setErrorGastos(true);
+            throw error;
+        } finally {
+            setActualizandoGastos(false);
+        }
+    };
 
     const [clientes, setClientes] = useState([]);
     const [clienteId, setClienteId] = useState('');
@@ -33,13 +56,12 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     useEffect(() => {
         const iniciarCaja = async () => {
             try {
-                const [resCaja, resClientes, resConfig] = await Promise.all([
-                    api.get('/ventas/caja/estado').catch(() => ({ data: { abierta: false } })),
+                const [, resClientes, resConfig] = await Promise.all([
+                    actualizarGastos().catch(() => null),
                     api.get('/clientes').catch(() => ({ data: [] })),
                     api.get('/configuracion').catch(() => ({ data: null }))
                 ]);
 
-                setCajaAbierta(!!resCaja.data?.abierta);
                 setClientes(resClientes.data || []);
                 
                 if (resConfig.data) {
@@ -63,6 +85,8 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
         try {
             await api.post('/ventas/caja/abrir', { monto_inicial: parseFloat(montoInicial) || 0 });
             setCajaAbierta(true);
+            setResumenGastos({ gastos: [], totalGastos: 0 });
+            setErrorGastos(false);
             toast.success("Caja abierta exitosamente! Buen turno.");
         } catch (error) {
             toast.error("Error al abrir caja: " + (error.response?.data?.error || ""));
@@ -225,7 +249,15 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
     };
 
     const handleCerrarCajaFormal = async () => {
-        const confirmar = window.confirm("Estas seguro de finalizar tu turno?");
+        let estado;
+        try {
+            estado = await actualizarGastos();
+        } catch {
+            toast.error('No se pudieron actualizar los gastos. Reintenta antes de cerrar.');
+            return;
+        }
+        if (!estado.abierta) return;
+        const confirmar = window.confirm(`Total gastos del turno: S/ ${Number(estado.totalGastos).toFixed(2)}\n\n¿Estás seguro de finalizar tu turno? Puedes cancelar para revisar el detalle en Gastos del turno.`);
         if (!confirmar) return;
 
         const montoFisico = window.prompt("Ingresa el dinero total en EFECTIVO que tienes en la caja fisica ahora mismo:", "0");
@@ -490,6 +522,35 @@ export default function CajaVentas({ productos, onVentaRealizada }) {
             
             {/* Columna izquierda - Productos */}
             <div className="w-full lg:w-2/3 flex flex-col gap-4">
+                <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-200" aria-label="Gastos del turno">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <h2 className="text-xl font-black text-slate-800">Gastos del turno</h2>
+                        <button type="button" disabled={actualizandoGastos} onClick={() => actualizarGastos().catch(() => {})} className="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 font-bold disabled:opacity-50">
+                            {actualizandoGastos ? 'Actualizando...' : 'Actualizar gastos'}
+                        </button>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-3">Solo tu sesión de caja actual. Actualiza para consultar gastos registrados desde otra pantalla.</p>
+                    {errorGastos ? <p role="alert" className="text-red-600">No se pudieron actualizar los gastos. Pulsa Actualizar gastos para reintentar.</p> : resumenGastos && (
+                        <>
+                            <div className="max-h-60 overflow-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead><tr><th className="p-2">Concepto</th><th className="p-2">Fecha y hora (Perú)</th><th className="p-2 text-right">Monto</th></tr></thead>
+                                    <tbody>
+                                        {(resumenGastos.gastos || []).map(gasto => (
+                                            <tr key={gasto.id} className="border-t border-slate-100">
+                                                <td className="p-2 break-words">{gasto.descripcion}</td>
+                                                <td className="p-2">{new Date(gasto.fecha).toLocaleString('es-PE', { timeZone: 'America/Lima' })}</td>
+                                                <td className="p-2 text-right whitespace-nowrap">S/ {Number(gasto.monto).toFixed(2)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {resumenGastos.gastos?.length === 0 && <p className="p-2 text-slate-500">No hay gastos registrados en este turno.</p>}
+                            </div>
+                            <p className="text-right font-bold text-slate-800 mt-3">Total gastos: S/ {resumenGastos.totalGastos.toFixed(2)}</p>
+                        </>
+                    )}
+                </section>
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                     <h2 className="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">🔍 Buscar Tela</h2>
                     <input 
